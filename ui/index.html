@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NE India Security Intelligence Digest</title>
+<link rel="stylesheet" href="/vendor/leaflet.css">
+<script src="/vendor/leaflet.js"></script>
+<style>
+:root{
+  --bg:#0d1117; --surface:#161b22; --surface2:#1c2128; --border:#30363d;
+  --accent:#e36209; --accent2:#1f6feb; --red:#f85149; --green:#3fb950;
+  --yellow:#d29922; --muted:#8b949e; --text:#e6edf3; --subtext:#c9d1d9;
+  --crit:#f85149; --high:#e36209; --med:#d29922; --low:#8b949e;
+}
+*{box-sizing:border-box;margin:0}
+body{background:var(--bg);color:var(--text);
+  font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;
+  padding:18px 26px 12px;border-bottom:1px solid var(--border)}
+header h1{font-size:17px;font-weight:700;letter-spacing:.4px}
+header h1 span{color:var(--accent)}
+#window-banner{color:var(--muted);font-size:12.5px}
+#controls{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+select,button,input{background:var(--surface2);color:var(--text);border:1px solid var(--border);
+  border-radius:6px;padding:6px 12px;font-size:13px}
+button{cursor:pointer}
+input#search{min-width:230px}
+input#search::placeholder{color:var(--muted)}
+button.primary{background:var(--accent);border-color:var(--accent);color:#0d1117;font-weight:600}
+button:disabled{opacity:.5;cursor:wait}
+nav{display:flex;gap:2px;padding:0 26px;border-bottom:1px solid var(--border);
+  overflow-x:auto}
+nav a{padding:10px 14px;color:var(--muted);text-decoration:none;font-size:13.5px;
+  border-bottom:2px solid transparent;white-space:nowrap;cursor:pointer}
+nav a.active{color:var(--text);border-bottom-color:var(--accent)}
+nav a:focus-visible{outline:2px solid var(--accent2);outline-offset:-2px}
+main{padding:20px 26px;max-width:1280px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:8px;
+  padding:14px 16px;margin-bottom:14px}
+
+/* ---- Console: region columns ---- */
+.columns{display:flex;gap:12px;overflow-x:auto;padding-bottom:8px}
+.col{flex:0 0 300px;min-width:300px;background:var(--surface);border:1px solid var(--border);
+  border-radius:8px;display:flex;flex-direction:column;max-height:calc(100vh - 200px)}
+.col-head{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border);
+  position:sticky;top:0;background:var(--surface);border-radius:8px 8px 0 0}
+.col-head b{font-size:13px;text-transform:uppercase;letter-spacing:.8px}
+.col-head .n{margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--muted)}
+.col-body{overflow-y:auto;padding:8px}
+.col.empty-col{opacity:.5}
+.icard{display:flex;gap:10px;padding:9px;border-radius:7px;border:1px solid var(--surface2);
+  margin-bottom:8px;background:var(--bg)}
+.icard:last-child{margin-bottom:0}
+.icard .thumb{flex:0 0 54px;width:54px;height:54px;border-radius:5px;object-fit:cover;background:var(--surface2)}
+.icard .ibody{flex:1;min-width:0}
+.icard .imeta{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:3px}
+.icard a.isum{color:var(--text);text-decoration:none;font-size:13.5px;font-weight:500;display:block}
+.icard a.isum:hover{color:var(--accent2);text-decoration:underline}
+.icard .its{color:var(--muted);font-size:11px;margin-top:3px;display:block}
+.sev{font-family:ui-monospace,Menlo,monospace;font-size:10px;font-weight:700;padding:1px 6px;
+  border-radius:9px;letter-spacing:.4px}
+.sev-CRITICAL{color:#fff;background:var(--crit)}
+.sev-HIGH{color:#fff;background:var(--high)}
+.sev-MEDIUM{color:#0d1117;background:var(--med)}
+.sev-LOW{color:var(--muted);border:1px solid var(--border)}
+.crit-badge{font-family:ui-monospace,Menlo,monospace;font-size:10px;color:var(--crit);
+  border:1px solid var(--crit);border-radius:9px;padding:1px 6px}
+
+/* ---- generic story rows (list tabs) ---- */
+.story{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;
+  padding:9px 4px;border-bottom:1px solid var(--surface2)}
+.story:last-child{border-bottom:none}
+.story a.head{color:var(--text);text-decoration:none;font-weight:500;flex:1;min-width:260px}
+.story a.head:hover{color:var(--accent2);text-decoration:underline}
+.badge{font-family:ui-monospace,Menlo,monospace;font-size:11px;padding:2px 7px;
+  border-radius:10px;border:1px solid var(--border);color:var(--subtext);
+  background:var(--surface2);white-space:nowrap}
+.badge.x{color:#fff;background:var(--accent2);border-color:var(--accent2)}
+.badge.v-rss{color:var(--green);border-color:var(--green)}
+.badge.v-xapi{color:var(--accent2);border-color:var(--accent2)}
+.badge.v-p1{color:var(--yellow);border-color:var(--yellow)}
+.badge.v-p2{color:var(--accent);border-color:var(--accent)}
+.ts{color:var(--muted);font-size:12px;white-space:nowrap}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);
+  margin:22px 0 8px}
+h2 .n{color:var(--accent);font-family:ui-monospace,Menlo,monospace;margin-right:6px}
+.stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 14px}
+.stat b{display:block;font-size:22px;font-family:ui-monospace,Menlo,monospace}
+.stat span{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:6px 10px;border-bottom:1px solid var(--surface2)}
+th{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.8px}
+td.mono{font-size:12px}
+.ok{color:var(--green)}.thin{color:var(--yellow)}.zero{color:var(--red)}
+details{margin-bottom:8px}
+summary{cursor:pointer;padding:8px 4px;color:var(--subtext);font-weight:600}
+.empty{color:var(--muted);padding:30px 4px;text-align:center}
+#runmsg{font-size:12px;color:var(--yellow)}
+
+/* ---- Map ---- */
+.mapscope{display:flex;gap:6px;margin-bottom:10px}
+.mapscope button{font-size:12.5px;padding:5px 12px}
+.mapscope button.on{background:var(--accent2);border-color:var(--accent2);color:#fff}
+#mapstats{color:var(--muted);font-size:12.5px;margin-bottom:8px}
+#map{height:calc(100vh - 220px);min-height:420px;border:1px solid var(--border);
+  border-radius:8px;background:#0b0f14}
+.leaflet-container{background:#0b0f14}
+.leaflet-popup-content-wrapper{background:var(--surface);color:var(--text);border:1px solid var(--border)}
+.leaflet-popup-tip{background:var(--surface);border:1px solid var(--border)}
+.leaflet-popup-content{margin:10px 12px;font:13px/1.4 -apple-system,Segoe UI,sans-serif}
+.ppop .ptitle{font-weight:700;font-size:13px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.ppop .pstate{color:var(--muted);font-family:ui-monospace,Menlo,monospace;font-size:11px}
+.pincident{margin-bottom:9px}
+.pincident:last-child{margin-bottom:0}
+.pincident a{color:var(--text);text-decoration:none;display:block;margin-top:2px}
+.pincident a:hover{color:var(--accent2);text-decoration:underline}
+.pincident .pmeta{color:var(--muted);font-size:11px;margin-top:2px}
+.maplegend{display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;font-size:12px;color:var(--muted)}
+.maplegend .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:middle}
+@media (max-width:640px){main,header,nav{padding-left:14px;padding-right:14px}}
+</style>
+</head>
+<body>
+<header>
+  <h1>NE INDIA <span>//</span> SECURITY INTEL DIGEST</h1>
+  <div id="window-banner" class="mono"></div>
+  <div id="controls">
+    <input id="search" type="search" placeholder="Filter news… (multi-word)" aria-label="Filter">
+    <span id="runmsg"></span>
+    <select id="dateSel" aria-label="Digest date"></select>
+    <button class="primary" id="runBtn">Run now</button>
+  </div>
+</header>
+<nav id="tabs">
+  <a data-tab="console" class="active">Console</a>
+  <a data-tab="map">Map</a>
+  <a data-tab="stories">All Stories</a>
+  <a data-tab="sections">By Section</a>
+  <a data-tab="sources">Source Status</a>
+  <a data-tab="audit">Audit</a>
+  <a data-tab="archive">Archive</a>
+</nav>
+<main id="content"><div class="empty">Loading…</div></main>
+
+<script>
+const $=s=>document.querySelector(s);
+const $$=s=>document.querySelectorAll(s);
+const STATE_ORDER=["MN","AS","NL","MZ","ML","AR","TR","SK","MULTI"];
+const STATE_NAME={AS:"Assam",MN:"Manipur",NL:"Nagaland",MZ:"Mizoram",ML:"Meghalaya",
+  AR:"Arunachal",TR:"Tripura",SK:"Sikkim",MULTI:"Multi / Border"};
+const SEVCOL={CRITICAL:"#f85149",HIGH:"#e36209",MEDIUM:"#d29922",LOW:"#8b949e"};
+let D=null, tab="console", query="", mapObj=null, mapScope="all";
+
+const esc=t=>(t||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const prevDay=d=>{const [y,m,dd]=d.split("-").map(Number);const x=new Date(Date.UTC(y,m-1,dd));x.setUTCDate(x.getUTCDate()-1);return x.toISOString().slice(0,10)};
+const VB={"rss-pubdate":["v-rss","RSS"],"feed-date":["v-rss","RSS"],
+  "x-api":["v-xapi","𝕏"],"crawl":["v-p1","CRAWL"],"screenshot":["v-p2","SHOT"]};
+const vb=s=>{const e=VB[s.date_source];return e?`<span class="badge ${e[0]}">${e[1]}</span>`:"";};
+const outletB=s=>s.outlet&&s.outlet.startsWith("X / ")
+  ?`<span class="badge x">𝕏 ${esc(s.outlet.slice(4))}</span>`
+  :(s.outlet?`<span class="badge">${esc(s.outlet)}</span>`:"");
+const sevB=s=>s.severity?`<span class="sev sev-${s.severity}">${s.severity}</span>`:"";
+const tstamp=s=>`${s.pub_date||"—"}${s.pub_time_ist&&s.pub_time_ist!=="unknown"?" · "+s.pub_time_ist+" IST":""}`;
+
+// list-tab row: severity + summary(link) + date + light metadata
+const storyRow=s=>`<div class="story">
+  ${sevB(s)}
+  <a class="head" href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.summary||s.headline||"")}</a>
+  <span class="ts mono">${tstamp(s)}</span>
+  ${outletB(s)}${s.state?`<span class="badge">${s.state}</span>`:""}${vb(s)}</div>`;
+
+// console card: thumbnail + severity + summary(link) + meta
+const iCard=s=>`<div class="icard">
+  ${s.image_url?`<img class="thumb" src="${esc(s.image_url)}" loading="lazy" onerror="this.style.display='none'">`:""}
+  <div class="ibody">
+    <div class="imeta">${sevB(s)}${outletB(s)}</div>
+    <a class="isum" href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.summary||s.headline||"")}</a>
+    <span class="its mono">${tstamp(s)}</span>
+  </div></div>`;
+
+const matches=s=>{
+  if(!query)return true;
+  const hay=((s.headline||"")+" "+(s.summary||"")+" "+(s.outlet||"")).toLowerCase();
+  return query.toLowerCase().split(/\s+/).filter(Boolean).every(w=>hay.includes(w));
+};
+
+function banner(){
+  const upd=new Date().toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"});
+  const iv=D&&D.auto_refresh_minutes?` · auto-refresh ${D.auto_refresh_minutes}m`:"";
+  const busy=D&&D.collecting?" · collecting new news…":"";
+  $("#window-banner").textContent=D&&D.date
+    ?`Covering: ${prevDay(D.date)} + ${D.date}  ·  updated ${upd}${iv}${busy}`
+    :"No runs yet — press Run now";
+}
+
+async function load(date){
+  D=await (await fetch("/api/digest"+(date?`?date=${date}`:""))).json();
+  const dates=await (await fetch("/api/dates")).json();
+  const cur=date||D.date;
+  $("#dateSel").innerHTML=dates.map(d=>`<option ${d===cur?"selected":""}>${d}</option>`).join("");
+  banner();
+  render();
+}
+
+// Auto-refresh: silently re-pull the digest so newly collected stories appear
+// on top. Skips a re-render on Map/Archive so it doesn't reset the map view.
+async function poll(){
+  try{
+    const nd=$("#dateSel").value||"";
+    const fresh=await (await fetch("/api/digest"+(nd?`?date=${nd}`:""))).json();
+    if(fresh&&fresh.stories){D=fresh;banner();if(tab!=="map"&&tab!=="archive")render();}
+  }catch(e){}
+}
+setInterval(poll,60000);
+
+function render(){
+  const c=$("#content");
+  if(!D||!D.stories){c.innerHTML='<div class="empty">No data.</div>';return}
+  if(tab==="console")c.innerHTML=consoleView();
+  else if(tab==="map")renderMap();
+  else if(tab==="stories")c.innerHTML=allStories();
+  else if(tab==="sections")c.innerHTML=bySection();
+  else if(tab==="sources")c.innerHTML=sources();
+  else if(tab==="audit")c.innerHTML=audit();
+  else if(tab==="archive")archive();
+}
+
+const tkey=s=>(s.pub_date||"")+" "+(s.pub_time_ist||"");
+function consoleView(){
+  const rows=D.stories.filter(matches);
+  const cols=STATE_ORDER.map(st=>{
+    let list=rows.filter(s=>s.state===st);
+    list.sort((a,b)=>tkey(b).localeCompare(tkey(a)));   // newest news on top
+    const crit=list.filter(s=>s.severity==="CRITICAL").length;
+    return `<div class="col ${list.length?"":"empty-col"}">
+      <div class="col-head"><b style="color:${list.length?"var(--text)":"var(--muted)"}">${STATE_NAME[st]}</b>
+        ${crit?`<span class="crit-badge">${crit} CRIT</span>`:""}
+        <span class="n">${list.length}</span></div>
+      <div class="col-body">${list.length?list.map(iCard).join(""):'<div class="empty" style="padding:16px">—</div>'}</div>
+    </div>`;
+  }).join("");
+  return `<div class="columns">${cols}</div>`;
+}
+
+function allStories(){
+  const rows=D.stories.filter(matches);
+  return `<div class="card">${rows.length?rows.map(storyRow).join(""):'<div class="empty">No stories match.</div>'}</div>`;
+}
+
+function bySection(){
+  const rows=D.stories.filter(matches);
+  return Object.entries(D.sections||{}).map(([n,name])=>{
+    const list=rows.filter(s=>String(s.section)===String(n));
+    if(!list.length)return"";
+    return`<h2><span class="n">${String(n).padStart(2,"0")}</span>${esc(name)}</h2>
+      <div class="card">${list.map(storyRow).join("")}</div>`;
+  }).join("")||'<div class="empty">No stories.</div>';
+}
+
+function sources(){
+  return `<div class="card"><table><tr><th>Source</th><th>Step</th><th>Status</th><th>Candidates</th></tr>
+  ${(D.sources||[]).map(s=>`<tr><td class="mono">${esc(s.source)}</td><td class="mono">${s.step}</td>
+    <td class="mono ${s.status.startsWith("ok")?"ok":"zero"}">${esc(s.status)}</td>
+    <td class="mono">${s.candidates}</td></tr>`).join("")}</table></div>`;
+}
+
+function audit(){
+  const a=D.audit||{};
+  return `<div class="card"><table><tr><th>Metric</th><th>Value</th></tr>
+  ${Object.entries(a).map(([k,v])=>`<tr><td class="mono">${k}</td><td class="mono">${typeof v==="object"?esc(JSON.stringify(v)):v}</td></tr>`).join("")}
+  </table></div>
+  <h2>Excluded (${(D.excluded||[]).length})</h2>
+  <div class="card"><table><tr><th>URL</th><th>Reason</th></tr>
+  ${(D.excluded||[]).map(e=>`<tr><td class="mono" style="max-width:600px;overflow:hidden;text-overflow:ellipsis">
+    <a href="${esc(e.url)}" target="_blank" rel="noopener" style="color:var(--muted)">${esc(e.url)}</a></td>
+    <td class="mono">${esc(e.reason)}</td></tr>`).join("")||'<tr><td colspan=2 class="empty">None</td></tr>'}
+  </table></div>`;
+}
+
+async function archive(){
+  const arc=await (await fetch("/api/archive")).json();
+  $("#content").innerHTML=arc.map(d=>`<details ${d.date===D.date?"open":""}>
+    <summary class="mono">${d.date} — ${d.stories.length} stories</summary>
+    <div class="card">${d.stories.map(storyRow).join("")||'<div class="empty">Empty</div>'}</div>
+  </details>`).join("")||'<div class="empty">No archive yet.</div>';
+}
+
+// ---------- Map (offline Leaflet + GeoJSON basemap) ----------
+function popupHtml(p){
+  const rows=p.incidents.map(i=>`<div class="pincident">
+    <span class="sev sev-${i.severity}">${i.severity}</span>
+    <a href="${esc(i.url)}" target="_blank" rel="noopener">${esc(i.summary||i.headline)}</a>
+    <div class="pmeta mono">${i.pub_date}${i.pub_time_ist&&i.pub_time_ist!=="unknown"?" · "+i.pub_time_ist:""}${i.outlet?" · "+esc(i.outlet):""}</div>
+  </div>`).join("");
+  return `<div class="ppop"><div class="ptitle">${esc(p.place)} <span class="pstate">${p.state}</span> · ${p.incidents.length} incident${p.incidents.length>1?"s":""}</div>${rows}</div>`;
+}
+
+async function renderMap(){
+  $("#content").innerHTML=`
+    <div class="mapscope">
+      <button data-scope="all" class="${mapScope==="all"?"on":""}">All news</button>
+      <button data-scope="security" class="${mapScope==="security"?"on":""}">Security only</button>
+    </div>
+    <div id="mapstats" class="mono">Loading map…</div><div id="map"></div>
+    <div class="maplegend">
+      <span><span class="dot" style="background:${SEVCOL.CRITICAL}"></span>Critical</span>
+      <span><span class="dot" style="background:${SEVCOL.HIGH}"></span>High</span>
+      <span><span class="dot" style="background:${SEVCOL.MEDIUM}"></span>Medium</span>
+      <span><span class="dot" style="background:${SEVCOL.LOW}"></span>Low</span>
+      <span>Dot size = number of incidents · click a dot for details</span>
+    </div>`;
+  $$(".mapscope button").forEach(b=>b.onclick=()=>{mapScope=b.dataset.scope;renderMap();});
+  const q=`?scope=${mapScope}`+(D.date?`&date=${D.date}`:"");
+  const [data, gj] = await Promise.all([
+    fetch("/api/map"+q).then(r=>r.json()),
+    fetch("/vendor/ne_states.geojson").then(r=>r.json()),
+  ]);
+  const one=data.located===1;
+  const noun=mapScope==="security"?(one?"security incident":"security incidents"):(one?"story":"stories");
+  $("#mapstats").textContent=`${data.located} ${noun} plotted at ${data.points.length} location${data.points.length===1?"":"s"} — ${data.unlocated} without a recognized place (not shown) · ${data.total} total ${mapScope==="security"?"security ":""}stories · ${data.date}`;
+  if(mapObj){mapObj.remove();mapObj=null;}
+  mapObj=L.map("map",{attributionControl:false,minZoom:5,maxZoom:11});
+  const base=L.geoJSON(gj,{style:{color:"#3d4450",weight:1.2,fillColor:"#161b22",fillOpacity:.65}}).addTo(mapObj);
+  base.bindTooltip(l=>l.feature.properties.name,{sticky:true});
+  mapObj.fitBounds(base.getBounds(),{padding:[16,16]});
+  mapObj.setMaxBounds(base.getBounds().pad(0.5));
+  data.points.forEach(p=>{
+    const col=SEVCOL[p.severity]||SEVCOL.LOW;
+    L.circleMarker([p.lat,p.lon],{radius:6+Math.min(p.incidents.length*2,12),
+      color:col,weight:2,fillColor:col,fillOpacity:.6})
+     .addTo(mapObj).bindPopup(popupHtml(p),{maxWidth:340});
+  });
+  setTimeout(()=>mapObj&&mapObj.invalidateSize(),60);
+}
+
+// ---------- wiring ----------
+$("#tabs").onclick=e=>{
+  const a=e.target.closest("a[data-tab]"); if(!a)return; e.preventDefault();
+  document.querySelectorAll("#tabs a").forEach(x=>x.classList.remove("active"));
+  a.classList.add("active"); tab=a.dataset.tab; render();
+};
+$("#search").oninput=e=>{query=e.target.value;
+  if(tab==="console"||tab==="stories"||tab==="sections")render();};
+$("#dateSel").onchange=e=>load(e.target.value);
+$("#runBtn").onclick=async()=>{
+  $("#runBtn").disabled=true;$("#runmsg").textContent="Collecting + verifying…";
+  await fetch("/api/run",{method:"POST"});
+  const poll=setInterval(async()=>{
+    const s=await (await fetch("/api/run/status")).json();
+    if(!s.running){clearInterval(poll);$("#runBtn").disabled=false;
+      $("#runmsg").textContent="";load()}
+  },3000);
+};
+load();
+</script>
+</body>
+</html>

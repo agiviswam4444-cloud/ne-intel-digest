@@ -1,0 +1,193 @@
+# NE India Security Intelligence Digest — configuration
+# Window: YESTERDAY 07:00 IST -> TODAY 07:00 IST, computed at runtime.
+
+window:
+  timezone: "Asia/Kolkata"
+  cutoff_hour: 7        # 07:00 IST daily boundary
+
+# true  = trust each feed's own publish date; keep anything in the today/
+#         yesterday window (no per-article re-fetch). Fetches ALL NE-state news,
+#         normal or security. Inclusion gate = mentions a state/place in
+#         `states:` below (edit that list to add/remove states).
+# false = legacy: security-keyword relevance gate + two-pass date verification.
+trust_feed_dates: true
+
+# Auto-refresh: when serving, re-run collection every N minutes in the
+# background (incremental — new stories are added, existing kept). 0 = off.
+auto_refresh_minutes: 30
+
+# Crawled/screenshot items (papers with no RSS feed) have no publish date.
+# Stamp them with the collection time so they land in the today/yesterday
+# window. Cap how many top-of-homepage links to take per crawl.
+crawl_max_items: 14
+
+paths:
+  db: "data/digest.db"
+  json_out: "data/archive"   # fallback JSON per run
+
+# One-line summaries. false = deterministic (RSS description, first sentence,
+# stripped of HTML, max 160 chars; headline if no description). true = generate
+# via a single batched claude-haiku-4-5 call per run (needs ANTHROPIC_API_KEY).
+ai_summaries: false
+
+# TIER 4 screenshot fallback (Playwright screenshot -> claude-haiku-4-5 vision).
+# Max sites sent to the Claude API per run. Skipped if ANTHROPIC_API_KEY unset.
+tier4_max_sites: 5
+
+# ------------------------------------------------------------------
+# State-wise newspapers (from the uploaded NE + Sikkim list). Each paper is
+# read via the fallback cascade — RSS (tier0) -> cloudscraper (tier1) ->
+# headless-Chrome crawl (tier2) -> screenshot+Claude (tier3) — so a paper with
+# no feed is still captured. `state` tags every story to its state column;
+# feedless papers use the homepage URL (the cascade falls through to crawl).
+# `url` is a working RSS feed where one exists, else the homepage.
+# ------------------------------------------------------------------
+papers:
+  # --- Assam ---
+  - {name: "Assam Tribune",    state: AS, url: "https://assamtribune.com/feed/"}
+  - {name: "The Sentinel",     state: AS, url: "https://sentinelassam.com/feed/"}
+  - {name: "Asomiya Pratidin", state: AS, url: "https://asomiyapratidin.in/rss"}
+  - {name: "Niyomiya Barta",   state: AS, url: "https://niyomiyabarta.com/feed/"}
+  - {name: "Assam Chronicle",  state: AS, url: "https://assamchronicle.com"}
+  - {name: "Dainik Agradoot",  state: AS, url: "https://www.agradoot.in"}
+  # --- Nagaland ---
+  - {name: "Nagaland Post",    state: NL, url: "https://nagalandpost.com/feed/"}
+  - {name: "Morung Express",   state: NL, url: "https://morungexpress.com/feed/"}
+  - {name: "Nagaland Tribune", state: NL, url: "https://nagalandtribune.in/feed/"}
+  - {name: "Eastern Mirror",   state: NL, url: "https://easternmirrornagaland.com"}
+  - {name: "Nagaland Page",    state: NL, url: "https://nagalandpage.com"}
+  # --- Meghalaya ---
+  - {name: "Shillong Times",   state: ML, url: "https://theshillongtimes.com/feed/"}
+  - {name: "Meghalaya Monitor", state: ML, url: "https://meghalayamonitor.com/feed/"}
+  - {name: "Highland Post",    state: ML, url: "https://highlandpost.com/feed/"}
+  # --- Manipur (all feedless -> crawl) ---
+  - {name: "The Sangai Express", state: MN, url: "https://www.thesangaiexpress.com"}
+  - {name: "Imphal Free Press",  state: MN, url: "https://ifp.co.in"}
+  - {name: "Hueiyen Lanpao",     state: MN, url: "https://hueiyenlanpao.com"}
+  # --- Mizoram (feedless -> crawl) ---
+  - {name: "The Mizoram Post",  state: MZ, url: "https://www.themizorampost.net"}
+  - {name: "Zozam Times",       state: MZ, url: "https://www.zozamtimes.in"}
+  # --- Tripura (feedless -> crawl) ---
+  - {name: "Tripura Times",       state: TR, url: "https://tripuratimes.com"}
+  - {name: "Daily Desher Katha",  state: TR, url: "https://www.dailydesherkatha.net"}
+  # --- Arunachal Pradesh ---
+  - {name: "Arunachal Times",   state: AR, url: "https://arunachaltimes.in/?feed=rss2"}
+  - {name: "Echo of Arunachal", state: AR, url: "https://echoofarunachal.in"}
+  # --- Sikkim ---
+  - {name: "Voice of Sikkim", state: SK, url: "https://voiceofsikkim.com/feed/"}
+  - {name: "Sikkim Express",  state: SK, url: "https://sikkimexpress.com"}
+
+  # === Additional sources found by deep search (verified feed or crawlable) ===
+  # --- Assam ---
+  - {name: "G Plus",          state: AS, url: "https://guwahatiplus.com/feed/"}
+  - {name: "Pratidin Time",   state: AS, url: "https://pratidintime.com/rss"}
+  - {name: "The News Mill",   state: AS, url: "https://thenewsmill.com/feed/"}
+  - {name: "Assam Times",     state: AS, url: "https://assamtimes.org/feed/"}
+  - {name: "The Hills Times", state: AS, url: "https://thehillstimes.in/feed/"}
+  - {name: "India Today NE",  state: AS, url: "https://www.indiatodayne.in"}       # crawl
+  # --- Manipur (extra feed sources — fixes the feedless-Manipur gap) ---
+  - {name: "Ukhrul Times",        state: MN, url: "https://ukhrultimes.com/feed/"}
+  - {name: "Imphal Times",        state: MN, url: "https://imphaltimes.com/feed/"}
+  - {name: "The Frontier Manipur", state: MN, url: "https://thefrontiermanipur.com/feed/"}
+  - {name: "KanglaOnline",        state: MN, url: "https://kanglaonline.com/feed/"}
+  - {name: "E-Pao",               state: MN, url: "https://e-pao.org"}             # crawl
+  # --- Meghalaya ---
+  - {name: "Syllad",          state: ML, url: "https://syllad.com/feed/"}
+  - {name: "Meghalaya Times", state: ML, url: "https://meghalayatimes.info/feed/"}
+  # --- Mizoram (Mizoram Post .com HAS a feed; .net above is feedless) ---
+  - {name: "Mizoram Post",    state: MZ, url: "https://mizorampost.com/feed/"}
+  - {name: "Vanglaini",       state: MZ, url: "https://vanglaini.org"}            # crawl (Mizo daily)
+  - {name: "Zalen",           state: MZ, url: "https://zalen.in"}                 # crawl
+  # --- Tripura ---
+  - {name: "Tripura Chronicle",  state: TR, url: "https://tripurachronicle.in/feed/"}
+  - {name: "Tripura Star News",  state: TR, url: "https://tripurastarnews.com/feed/"}
+  - {name: "Northeast Herald",   state: TR, url: "https://northeastherald.com"}   # crawl
+  # --- Arunachal Pradesh ---
+  - {name: "Arunachal Observer", state: AR, url: "https://arunachalobserver.org/feed/"}
+  # --- Sikkim ---
+  - {name: "The Sikkim Chronicle", state: SK, url: "https://thesikkimchronicle.com/feed/"}
+
+# Pan-NE aggregators (not state-specific). State is assigned per story by
+# keyword (config.states). Kept because they carry a lot of same-day coverage.
+aggregators:
+  - https://eastmojo.com/feed/
+  - https://nenow.in/feed/
+  - https://nenews.in/feed/
+  - https://time8.in/feed/
+  - https://www.thenortheastpost.com     # crawl
+  - https://insidenortheast.in           # crawl
+
+# ------------------------------------------------------------------
+# STEP 1D — X API v2 (created_at trusted as-is). Optional.
+# ------------------------------------------------------------------
+x_api:
+  enabled: true
+  bearer_token_file: "~/Documents/x_bearer_token.txt"
+  handles:
+    PIBGuwahati:     {state: MULTI, section: 2}
+    manipur_police:  {state: MN,    section: 2}
+    adgpi:           {state: MULTI, section: 1}
+    assampolice:     {state: AS,    section: 2}
+    assamrifles:     {state: MULTI, section: 1}
+    HimantaBiswa:    {state: AS,    section: 11}
+    nagalandpolice:  {state: NL,    section: 2}
+    Mizoram_Police:  {state: MZ,    section: 2}
+
+# ------------------------------------------------------------------
+# Relevance gate — a story must match at least one keyword (any case)
+# unless it comes from an official X handle.
+# ------------------------------------------------------------------
+relevance_keywords:
+  [army, "assam rifles", rifles, military, soldier, jawan, troops, security,
+   militant, insurgen, cadre, NSCN, ULFA, NDFB, PREPAK, KYKL, KCP, PLA, RPF,
+   MNPF, HNLC, GNLA, NLFT, ATTF, KPLT, UPLA, ZRA, "Kuki", "Meitei", "Naga",
+   encounter, ambush, IED, "gun battle", firing, killed, arrested, seized,
+   surrender, ceasefire, "peace talk", AFSPA, OGW, "overground worker",
+   BSF, CRPF, police, "para military", paramilitary, infiltrat, smuggl,
+   narcotic, drugs, heroin, "brown sugar", yaba, trafficking, "arms cache",
+   weapons, ammunition, LAC, China, PLA, Myanmar, "Chin National", KNA,
+   refugee, border, fencing, Moreh, Zokhawthar, curfew, "internet suspension",
+   bandh, extortion, abduct, kidnap, "peace process", "Naga flag"]
+
+# URL-slug date accepted as last resort only for these outlets (RULE 4f)
+slug_reliable_outlets:
+  [eastmojo.com, mizzima.com, organiser.org, theshillongtimes.com,
+   northeast-now.com, pratidintime.com]
+
+# ------------------------------------------------------------------
+# STEP 5 — 11 sections, keyword-scored. First matching wins by score.
+# ------------------------------------------------------------------
+sections:
+  1:  {name: "Army & Assam Rifles",
+       keywords: [army, "assam rifles", "territorial army", corps, brigade, battalion, "indian army", adgpi, jawan, soldier]}
+  2:  {name: "CRPF / BSF / State Police",
+       keywords: [crpf, bsf, police, commando, irb, "india reserve", ssb, itbp]}
+  3:  {name: "Manipur Ethnic Conflict",
+       keywords: [kuki, meitei, "zo people", churachandpur, "ethnic", "relief camp", "buffer zone", "displaced", imphal valley, kangpokpi]}
+  4:  {name: "ULFA-I & Assam Insurgency",
+       keywords: [ulfa, ndfb, kplt, upla, "adivasi", paresh, baruah, assam militant]}
+  5:  {name: "NSCN & Nagaland Groups",
+       keywords: [nscn, "naga flag", "framework agreement", muivah, "naga peace", nnpg, "eastern nagaland", enpo]}
+  6:  {name: "Other Militant Groups",
+       keywords: [prepak, kykl, kcp, "pla ", rpf, mnpf, hnlc, gnla, nlft, attf, zra, valley based, vbig, militant, insurgent, cadre, ogw]}
+  7:  {name: "Myanmar Border",
+       keywords: [myanmar, chin, sagaing, moreh, zokhawthar, "free movement", fmr, refugee, junta, tatmadaw, kna]}
+  8:  {name: "China-LAC (Arunachal)",
+       keywords: [china, lac, arunachal, tawang, "line of actual control", pla incursion, chinese]}
+  9:  {name: "Bangladesh Border",
+       keywords: [bangladesh, "cattle smuggl", "border haat", bgb, akhaura]}
+  10: {name: "Narcotics & Trafficking",
+       keywords: [drug, narcotic, heroin, yaba, "brown sugar", ganja, meth, trafficking, smuggl, "gold seiz", contraband]}
+  11: {name: "Major Regional Headlines",
+       keywords: []}   # fallback bucket
+
+# State detection by place/entity keywords (first strong match; multi if 2+)
+states:
+  AS: [assam, guwahati, dibrugarh, tinsukia, silchar, kokrajhar, karbi, bodoland, himanta]
+  MN: [manipur, imphal, churachandpur, kangpokpi, moreh, tamenglong, ukhrul, thoubal, bishnupur, senapati, meitei, kuki]
+  NL: [nagaland, kohima, dimapur, mon district, mokokchung, zunheboto, phek, wokha, tuensang, nscn, naga]
+  MZ: [mizoram, aizawl, champhai, zokhawthar, lawngtlai, mizo]
+  ML: [meghalaya, shillong, tura, garo, khasi, jaintia]
+  AR: [arunachal, itanagar, tawang, changlang, tirap, longding]
+  TR: [tripura, agartala, dhalai, khowai]
+  SK: [sikkim, gangtok, namchi, gyalshing, mangan, pakyong, soreng, rangpo, singtam, jorethang, geyzing]

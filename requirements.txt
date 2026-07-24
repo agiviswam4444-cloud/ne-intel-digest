@@ -1,0 +1,10 @@
+requests
+feedparser
+beautifulsoup4
+pyyaml
+python-dateutil
+fastapi
+uvicorn
+cloudscraper            # TIER 1 — basic Cloudflare bypass
+playwright              # TIER 3/4 — headless Chrome (run: playwright install chromium)
+anthropic               # TIER 4 screenshot OCR + optional ai_summaries (claude-haiku-4-5)
