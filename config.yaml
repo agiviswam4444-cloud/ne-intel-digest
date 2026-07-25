@@ -107,6 +107,11 @@ papers:
   # --- Sikkim ---
   - {name: "The Sikkim Chronicle", state: SK, url: "https://thesikkimchronicle.com/feed/"}
 
+  # === Second deep search additions (verified feeds) ===
+  - {name: "News Live",       state: AS, url: "https://www.newslivetv.com/feed/"}     # Assam TV
+  - {name: "Imphal Review",   state: MN, url: "https://imphalreviews.in/feed/"}       # Manipur politics/analysis
+  - {name: "Tir Yimyim",      state: NL, url: "https://tiryimyim.in/feed/"}           # Nagaland (Ao daily)
+
 # Pan-NE aggregators (not state-specific). State is assigned per story by
 # keyword (config.states). Kept because they carry a lot of same-day coverage.
 aggregators:
@@ -116,6 +121,9 @@ aggregators:
   - https://time8.in/feed/
   - https://www.thenortheastpost.com     # crawl
   - https://insidenortheast.in           # crawl
+  - https://thenortheasttoday.com/feed/  # The Northeast Today (pan-NE)
+  # National paper, DEDICATED North East section feed (NE-only, no national noise):
+  - https://indianexpress.com/section/north-east-india/feed/
 
 # ------------------------------------------------------------------
 # STEP 1D — X API v2 (created_at trusted as-is). Optional.
