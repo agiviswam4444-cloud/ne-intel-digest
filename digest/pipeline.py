@@ -1,5 +1,5 @@
 """Run orchestrator: compute window -> collect -> verify -> classify -> store -> JSON."""
-import os, json, datetime, concurrent.futures as cf
+import os, re, time, json, datetime, concurrent.futures as cf
 import yaml
 
 from . import db, collector, verifier, classifier, ai
@@ -40,6 +40,15 @@ def run(config_path="config.yaml", verbose=True):
     # dedups by URL); refresh only the per-run logs.
     con.execute("DELETE FROM excluded WHERE run_date=?", (run_date,))
     con.execute("DELETE FROM source_status WHERE run_date=?", (run_date,))
+    # Retention: prune rows older than retain_days so the DB stays bounded.
+    retain = int(cfg.get("retain_days", 0) or 0)
+    if retain > 0:
+        cutoff = (now_ist.date() - datetime.timedelta(days=retain)).isoformat()
+        con.execute("DELETE FROM stories WHERE pub_date < ?", (cutoff,))
+        con.execute("DELETE FROM excluded WHERE run_date < ?", (cutoff,))
+        con.execute("DELETE FROM source_status WHERE run_date < ?", (cutoff,))
+        con.execute("DELETE FROM runs WHERE run_date < ?", (cutoff,))
+        log(f"Retention: pruned rows older than {cutoff} (keep {retain}d)")
     con.commit()
 
     collected = []
@@ -103,12 +112,42 @@ def run(config_path="config.yaml", verbose=True):
         collected += tweets
         log(f"X API: {len(tweets)} tweets")
 
-    # ---- Dedup by URL ----
-    seen, uniq = set(), []
+    # ---- Topic discovery net: Google News keyword searches. Catches NE news
+    #      from ANY outlet (national / obscure / not in the paper list). Added
+    #      AFTER the papers so the direct-outlet copy wins the title-dedup. ----
+    disc = cfg.get("discovery_queries", [])
+    if disc:
+        # Google News rate-limits bursts, so keep concurrency low and retry.
+        def _disc(q):
+            status = "error:none"
+            for attempt in range(3):
+                cands, status = collector.fetch_news_rss(collector.google_news_url(q), q)
+                if cands:
+                    return q, cands, status
+                time.sleep(2 * (attempt + 1))
+            return q, [], status
+        n_disc = 0
+        with cf.ThreadPoolExecutor(3) as ex:
+            for q, cands, status in ex.map(_disc, disc):
+                db.log_source(con, run_date, f"search: {q}", "DISC", status, len(cands))
+                collected += cands           # state=None -> scope-gated + detect_state
+                n_disc += len(cands)
+        log(f"Discovery: {len(disc)} searches, {n_disc} candidates")
+
+    # ---- Dedup by URL, then by normalized headline (collapses the same story
+    #      seen via multiple outlets / the Google redirect; first seen wins,
+    #      and papers are ordered before discovery so real URLs win). ----
+    seen_url, seen_title, uniq = set(), set(), []
     for c in collected:
-        if c["url"] in seen:
+        if c["url"] in seen_url:
             continue
-        seen.add(c["url"])
+        tnorm = re.sub(r"[^a-z0-9 ]", "", (c.get("headline") or "").lower())
+        tnorm = re.sub(r"\s+", " ", tnorm).strip()
+        if tnorm and tnorm in seen_title:
+            continue
+        seen_url.add(c["url"])
+        if tnorm:
+            seen_title.add(tnorm)
         uniq.append(c)
 
     # ---- Date handling: trust each item's own date (feed pubDate, x created_at,

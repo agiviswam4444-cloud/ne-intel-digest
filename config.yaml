@@ -16,6 +16,11 @@ trust_feed_dates: true
 # background (incremental — new stories are added, existing kept). 0 = off.
 auto_refresh_minutes: 30
 
+# Keep stories (and per-run logs) from the last N days; older rows are pruned
+# at the start of each run so the database does not grow without bound.
+# 0 = keep everything forever.
+retain_days: 7
+
 # Crawled/screenshot items (papers with no RSS feed) have no publish date.
 # Stamp them with the collection time so they land in the today/yesterday
 # window. Cap how many top-of-homepage links to take per crawl.
@@ -124,6 +129,24 @@ aggregators:
   - https://thenortheasttoday.com/feed/  # The Northeast Today (pan-NE)
   # National paper, DEDICATED North East section feed (NE-only, no national noise):
   - https://indianexpress.com/section/north-east-india/feed/
+
+# ------------------------------------------------------------------
+# Topic discovery net — Google News keyword searches. This is the safety net
+# that catches NE news carried by ANY outlet (national, obscure, or simply not
+# in the list above): a story that is "in open source" but on a paper we don't
+# track is still found here. Results are date-trusted, NE-scope-gated, and
+# title-deduped against the papers above (the direct-outlet copy wins over the
+# Google redirect link). Set to [] to disable.
+discovery_queries:
+  - Manipur
+  - Assam
+  - Nagaland
+  - Meghalaya
+  - Mizoram
+  - Tripura
+  - Arunachal Pradesh
+  - Sikkim
+  - Northeast India army security militant border drugs seized
 
 # ------------------------------------------------------------------
 # STEP 1D — X API v2 (created_at trusted as-is). Optional.
