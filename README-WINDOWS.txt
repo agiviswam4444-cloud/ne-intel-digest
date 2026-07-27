@@ -20,6 +20,28 @@ RUN THE APP
   3. To stop: close the black command window.
      To start again later: double-click start-windows.bat again.
 
+UPDATING THE APP (get the latest code from GitHub)
+  The easy way is to install via "git clone" ONCE. Then every future update
+  is a double-click.
+
+  ONE-TIME SWITCH TO A GIT CLONE (do this once):
+    1. Install "Git for Windows":  https://git-scm.com/download/win
+    2. Open Command Prompt where you want the app, e.g.  cd C:\
+    3. Run:   git clone https://github.com/agiviswam4444-cloud/ne-intel-digest.git
+       (It will ask you to sign in to GitHub the first time - the repo is
+        private. A browser window handles the login.)
+    4. Use this new  ne-intel-digest  folder from now on. You can delete the
+       old unzipped folder. (Your news database is local and rebuilds itself.)
+
+  TO UPDATE FROM THEN ON:
+    * Double-click  update-windows.bat   (pulls the latest code, then starts).
+    * Your collected news and any local settings are NOT touched by updates.
+    * If an update ever complains about a missing Python package, delete the
+      file  .setup_done  and run start-windows.bat once to reinstall.
+
+  NO GIT? You can instead re-download the ZIP from the GitHub repo page
+  (green "Code" button -> Download ZIP) each time, and replace the files.
+
 OPEN IT MANUALLY (if the browser didn't open)
   Go to:  http://127.0.0.1:8642
 
