@@ -60,9 +60,13 @@ def run(config_path="config.yaml", verbose=True):
 
     # Source list: state-tagged papers (from the uploaded list) + pan-NE
     # aggregators. Each (url, state, label); aggregators have state=None.
-    sources = [(p["url"], p.get("state"), p.get("name") or p["url"])
+    # (url, state, label, trusted, sections).  `state` may be None for
+    # multi-state outlets — those get per-story state from the URL section.
+    # `trusted` (papers) bypasses the NE-scope keyword gate; aggregators do not.
+    sources = [(p["url"], p.get("state"), p.get("name") or p["url"],
+                True, p.get("sections"))
                for p in cfg.get("papers", [])]
-    sources += [(u, None, u) for u in cfg.get("aggregators", [])]
+    sources += [(u, None, u, False, None) for u in cfg.get("aggregators", [])]
 
     shot_state = {"used": 0, "max": cfg.get("tier4_max_sites", 5)}
     crawl_cap = cfg.get("crawl_max_items", 14)
@@ -73,7 +77,7 @@ def run(config_path="config.yaml", verbose=True):
         return src, collector.fetch_fast(src[0], start, end)
     with cf.ThreadPoolExecutor(8) as ex:
         for src, (in_win, unknown, status) in ex.map(_fast, sources):
-            url, state, label = src
+            url, state, label, trusted, _sec = src
             if status == "fast-exhausted":
                 slow.append(src)
                 continue
@@ -84,20 +88,23 @@ def run(config_path="config.yaml", verbose=True):
             for c in in_win + unknown:
                 if state:
                     c["state"] = state
+                c["trusted"] = trusted
                 collected.append(c)
 
     # Phase 2 — browser tiers 2-3 for feedless papers (serial, main thread;
     # Playwright is not thread-safe). Crawled/screenshot items are stamped with
     # the capture time so they land in the window.
     for src in slow:
-        url, state, label = src
-        cands, status = collector.fetch_slow(url, now_ist, crawl_cap, shot_state)
+        url, state, label, trusted, sections = src
+        cands, status = collector.fetch_slow(url, now_ist, crawl_cap, shot_state,
+                                             sections)
         db.log_source(con, run_date, label, state or "AGG", status, len(cands))
         _tier(status)
         stats["src_ok" if status.startswith("ok:") else "src_err"] += 1
         for c in cands:
             if state:
                 c["state"] = state
+            c["trusted"] = trusted
             collected.append(c)
 
     stats["sources"] = len(sources)
@@ -199,7 +206,10 @@ def run(config_path="config.yaml", verbose=True):
     kept, out_of_scope = [], 0
     for c in verified:
         text = (c["headline"] or "") + " " + (c.get("summary") or "")
-        if (not c.get("state") and c.get("date_source") != "x-api"
+        # NOTE: gate on `trusted`, NOT on `state`. A multi-state NE paper has no
+        # single state but is still a known NE outlet — gating on state would
+        # silently drop its stories that don't happen to name a place.
+        if (not c.get("trusted") and c.get("date_source") != "x-api"
                 and not classifier.in_ne_scope(text, cfg)):
             out_of_scope += 1
             continue
@@ -216,7 +226,11 @@ def run(config_path="config.yaml", verbose=True):
             "summary": c.get("summary") or c["headline"],
             "image_url": c.get("image_url"),
             "url": c["url"], "outlet": c["outlet"],
-            "state": c.get("state") or classifier.detect_state(c["headline"], cfg),
+            # state: configured single-state paper -> URL section -> keywords
+            "state": (c.get("state")
+                      or classifier.state_from_url(c.get("url"), cfg)
+                      or classifier.detect_state(
+                          (c["headline"] or "") + " " + (c.get("summary") or ""), cfg)),
             "section": c.get("section") or classifier.classify_section(c["headline"], cfg),
             "pub_date": d_ist.strftime("%Y-%m-%d"),
             "pub_time_ist": d_ist.strftime("%H:%M"),

@@ -23,8 +23,8 @@ retain_days: 7
 
 # Crawled/screenshot items (papers with no RSS feed) have no publish date.
 # Stamp them with the collection time so they land in the today/yesterday
-# window. Cap how many top-of-homepage links to take per crawl.
-crawl_max_items: 14
+# window. Cap how many links to take per crawled site (across all its pages).
+crawl_max_items: 40
 
 paths:
   db: "data/digest.db"
@@ -89,7 +89,13 @@ papers:
   - {name: "The News Mill",   state: AS, url: "https://thenewsmill.com/feed/"}
   - {name: "Assam Times",     state: AS, url: "https://assamtimes.org/feed/"}
   - {name: "The Hills Times", state: AS, url: "https://thehillstimes.in/feed/"}
-  - {name: "India Today NE",  state: AS, url: "https://www.indiatodayne.in"}       # crawl
+  # Multi-state outlet: NO forced `state` (per-story state comes from the URL
+  # section), and `sections` are crawled because its homepage does not link
+  # every state's stories.
+  - name: "India Today NE"
+    url: "https://www.indiatodayne.in"
+    sections: [assam, manipur, nagaland, meghalaya, mizoram, tripura,
+               arunachal-pradesh, sikkim]
   # --- Manipur (extra feed sources — fixes the feedless-Manipur gap) ---
   - {name: "Ukhrul Times",        state: MN, url: "https://ukhrultimes.com/feed/"}
   - {name: "Imphal Times",        state: MN, url: "https://imphaltimes.com/feed/"}

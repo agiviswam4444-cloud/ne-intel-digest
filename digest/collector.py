@@ -175,36 +175,118 @@ def _parse_feed_cloudscraper(url):
 
 
 # ---------------------------------------------------------------------------
-# TIER 2 — headless Chrome (Playwright): render homepage, scrape DOM headlines.
-# No feed = no date, so items are stamped with the capture time (`stamp`).
+# Feed auto-discovery — many outlets DO publish RSS, just not at /feed/.
+# Order: the site's own <link rel="alternate" type="application/rss+xml"> tag
+# (the standard advertisement), then common non-obvious paths. A 503 is treated
+# as "try again", not "no feed" (that is how indiatodayne.in's /rss looked).
 # ---------------------------------------------------------------------------
-def _crawl_dom(url, outlet, stamp, cap):
-    from playwright.sync_api import sync_playwright
-    home = _homepage(url)
-    anchors = []
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+_EXTRA_FEED_PATHS = ["/rss/news.xml", "/rss/", "/rss", "/feed/", "/feed",
+                     "/rss.xml", "/feed.xml", "/?feed=rss2", "/index.xml"]
+
+
+def _valid_feed(url):
+    """Return the feed url if it parses with >=3 entries, else None."""
+    for attempt in (1, 2):
         try:
-            page = browser.new_page(user_agent=UA["User-Agent"])
-            page.goto(home, wait_until="domcontentloaded", timeout=30000)
-            page.wait_for_timeout(2500)   # let JS render
-            anchors = page.eval_on_selector_all(
-                "a", "els => els.map(e => ({t:(e.innerText||'').trim(), h:e.href}))")
-        finally:
-            browser.close()
-    out, seen = [], set()
+            r = requests.get(url, headers=UA, timeout=12, allow_redirects=True)
+            if r.status_code == 503 and attempt == 1:
+                time.sleep(3)          # transient — retry once
+                continue
+            if r.status_code == 200:
+                fp = feedparser.parse(r.content)
+                if len(fp.entries) >= 3:
+                    return url
+        except Exception:
+            pass
+        break
+    return None
+
+
+def discover_feed(site_url):
+    """Best-effort: find a working RSS feed for a site. Returns url or None."""
+    home = _homepage(site_url).rstrip("/")
+    # 1. the page's own advertised feed link
+    try:
+        r = requests.get(home, headers=UA, timeout=15)
+        if r.status_code == 200:
+            for m in re.finditer(
+                    r'<link[^>]+type=["\']application/(?:rss|atom)\+xml["\'][^>]*>',
+                    r.text, re.I):
+                href = re.search(r'href=["\']([^"\']+)["\']', m.group(0), re.I)
+                if not href:
+                    continue
+                u = urllib.parse.urljoin(home + "/", href.group(1))
+                if "comments" in u.lower():      # skip comment feeds
+                    continue
+                if _valid_feed(u):
+                    return u
+    except Exception:
+        pass
+    # 2. common non-obvious paths
+    for p in _EXTRA_FEED_PATHS:
+        u = _valid_feed(home + p)
+        if u:
+            return u
+    return None
+
+
+# ---------------------------------------------------------------------------
+# TIER 2 — headless Chrome (Playwright): render page(s), scrape DOM headlines.
+# Crawls the homepage PLUS any configured section pages (e.g. /tripura,
+# /arunachal-pradesh) — many outlets never link their state stories from the
+# homepage. One browser is launched for ALL pages of a site (relaunching per
+# page cost ~4.8s each). No feed = no date, so items get the capture time.
+# ---------------------------------------------------------------------------
+# non-article link patterns: listing pages, galleries, video/photo stories
+_SKIP_LINK = re.compile(
+    r"/(category|tag|author|page|about|contact|visualstories|photos?|videos?|"
+    r"web-?stories|gallery|live-?tv|subscribe|privacy|terms)(/|$)", re.I)
+
+
+def _harvest(anchors, outlet, stamp, seen, out, page_cap):
+    """Take up to `page_cap` article links from one page (per-page quota, so a
+    later section is never starved by an earlier one filling a global cap)."""
+    taken = 0
     for a in anchors:
         t, h = (a.get("t") or "").strip(), (a.get("h") or "")
         if len(t) < 25 or not h.startswith("http") or h in seen:
             continue
-        # skip obvious non-article links (home/section/tag pages)
-        if re.search(r"/(category|tag|author|page|about|contact)/", h, re.I):
+        if _SKIP_LINK.search(h):
             continue
         seen.add(h)
         out.append({"headline": t, "summary": t, "url": h, "outlet": outlet,
                     "image_url": None, "pub_dt": stamp, "date_source": "crawl"})
-        if len(out) >= cap:
-            break
+        taken += 1
+        if taken >= page_cap:
+            return
+
+
+def _crawl_dom(url, outlet, stamp, cap, sections=None):
+    """Crawl homepage + optional section paths, reusing ONE browser for all
+    pages (relaunching per page cost ~4.8s; reuse brings it to ~0.4s)."""
+    from playwright.sync_api import sync_playwright
+    home = _homepage(url).rstrip("/")
+    targets = [home] + [f"{home}/{s.strip('/')}" for s in (sections or [])]
+    # Per-page quota so every section is represented, not just the first ones.
+    # Floor of 10/section: measured that real stories sit ~7 links deep on a
+    # section page, so a smaller quota silently truncates the day's news.
+    page_cap = cap if len(targets) == 1 else max(10, cap // len(targets))
+    out, seen = [], set()
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(user_agent=UA["User-Agent"])
+            for t_url in targets:
+                try:
+                    page.goto(t_url, wait_until="domcontentloaded", timeout=30000)
+                    page.wait_for_timeout(1800)   # let JS render
+                    anchors = page.eval_on_selector_all(
+                        "a", "els => els.map(e => ({t:(e.innerText||'').trim(), h:e.href}))")
+                except Exception:
+                    continue                      # one bad section never kills the rest
+                _harvest(anchors, outlet, stamp, seen, out, page_cap)
+        finally:
+            browser.close()
     return out
 
 
@@ -253,17 +335,28 @@ def fetch_fast(url, start, end):
             return iw, un, "ok:tier1"
     except Exception:
         pass
+    # TIER 1b — AUTO-DISCOVER a feed the site publishes elsewhere (rel=alternate
+    # tag, /rss/news.xml, ...). Real dates beat crawling, so try before the browser.
+    try:
+        found = discover_feed(url)
+        if found:
+            fp = _parse_feed(found)
+            if fp.entries:
+                iw, un = _split_direct(fp, outlet, start, end)
+                return iw, un, "ok:tier1-discovered"
+    except Exception:
+        pass
     return [], [], "fast-exhausted"
 
 
-def fetch_slow(url, stamp, cap, shot_state):
+def fetch_slow(url, stamp, cap, shot_state, sections=None):
     """Browser tiers 2-3 for feedless papers (main thread — Playwright is not
-    thread-safe). Items are stamped with `stamp` (capture time). Returns
-    (candidates, status)."""
+    thread-safe). Crawls homepage + `sections`. Items are stamped with `stamp`
+    (capture time). Returns (candidates, status)."""
     outlet = _outlet_from_url(url)
-    # TIER 2 — headless-Chrome DOM crawl
+    # TIER 2 — headless-Chrome DOM crawl (homepage + section pages)
     try:
-        cands = _crawl_dom(url, outlet, stamp, cap)
+        cands = _crawl_dom(url, outlet, stamp, cap, sections)
         if cands:
             return cands, "ok:crawl"
     except Exception:

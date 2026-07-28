@@ -28,6 +28,25 @@ def in_ne_scope(text, cfg):
     return bool(_SCOPE_RE.search(text or ""))
 
 
+def state_from_url(url, cfg):
+    """Derive the state from an article URL's section path, e.g.
+    indiatodayne.in/tripura/story/... -> TR. Multi-state outlets must NOT be
+    force-tagged to one state; the URL section is the reliable signal."""
+    if not url:
+        return None
+    low = url.lower()
+    # longest names first so 'arunachal-pradesh' wins over 'arunachal'
+    for code, kws in sorted(cfg["states"].items(),
+                            key=lambda kv: -max(len(k) for k in kv[1])):
+        for k in kws:
+            slug = k.lower().replace(" ", "-")
+            if len(slug) < 5:            # avoid short/ambiguous tokens in URLs
+                continue
+            if re.search(rf"/{re.escape(slug)}(?:/|-|$)", low):
+                return code
+    return None
+
+
 def detect_state(headline, cfg):
     # "Assam Rifles" is a force, not a location — don't let it tag state AS.
     t = headline.lower().replace("assam rifles", "").replace("assamrifles", "")
