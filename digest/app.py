@@ -1,5 +1,5 @@
 """Local web UI server. Run: python run.py serve  ->  http://127.0.0.1:8642"""
-import json, os, threading, datetime, time
+import json, os, sys, subprocess, threading, datetime, time
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -9,18 +9,23 @@ app = FastAPI(title="NE Intel Digest")
 CFG = pipeline.load_config(os.environ.get("DIGEST_CONFIG", "config.yaml"))
 UI_DIR = os.path.join(os.path.dirname(__file__), "..", "ui")
 UI = os.path.join(UI_DIR, "index.html")
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 # Bundled, offline map assets (Leaflet + NE states GeoJSON) — no external tiles.
 app.mount("/vendor", StaticFiles(directory=os.path.join(UI_DIR, "vendor")), name="vendor")
 _run_lock = threading.Lock()
 
 
 def _run_pipeline():
+    """Run a collection in a SEPARATE process. Collection drives a headless
+    browser (Playwright), which can crash; isolating it in a child process
+    means a crash can never take down this web server."""
     if not _run_lock.acquire(blocking=False):
         return False
     try:
-        pipeline.run(os.environ.get("DIGEST_CONFIG", "config.yaml"), verbose=True)
+        subprocess.run([sys.executable, os.path.join(ROOT, "run.py"), "collect"],
+                       cwd=ROOT, timeout=1500)
     except Exception as e:
-        print("pipeline run error:", e)
+        print("collect subprocess error:", e)
     finally:
         _run_lock.release()
     return True
