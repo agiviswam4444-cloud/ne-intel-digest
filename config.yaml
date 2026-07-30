@@ -153,6 +153,12 @@ discovery_queries:
   - Arunachal Pradesh
   - Sikkim
   - Northeast India army security militant border drugs seized
+  # Outlets that actively block automated access (Cloudflare bot challenge), so
+  # they cannot be fetched directly. Read via the Google News aggregator index
+  # rather than circumventing the site's own protection.
+  - site:northeasttoday.in
+  - site:thehansindia.com Northeast
+  - site:prokerala.com Manipur OR Assam OR Nagaland
 
 # ------------------------------------------------------------------
 # STEP 1D — X API v2 (created_at trusted as-is). Optional.

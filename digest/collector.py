@@ -261,12 +261,17 @@ def _harvest(anchors, outlet, stamp, seen, out, page_cap):
             return
 
 
-def _crawl_dom(url, outlet, stamp, cap, sections=None):
+def _crawl_dom(url, outlet, stamp, cap, sections=None, include_home=True):
     """Crawl homepage + optional section paths, reusing ONE browser for all
-    pages (relaunching per page cost ~4.8s; reuse brings it to ~0.4s)."""
+    pages (relaunching per page cost ~4.8s; reuse brings it to ~0.4s).
+    include_home=False crawls ONLY the section pages — used by the additive
+    section sweep, where a working feed already covers the front page."""
     from playwright.sync_api import sync_playwright
     home = _homepage(url).rstrip("/")
-    targets = [home] + [f"{home}/{s.strip('/')}" for s in (sections or [])]
+    targets = ([home] if include_home else []) + \
+              [f"{home}/{s.strip('/')}" for s in (sections or [])]
+    if not targets:
+        return []
     # Per-page quota so every section is represented, not just the first ones.
     # Floor of 10/section: measured that real stories sit ~7 links deep on a
     # section page, so a smaller quota silently truncates the day's news.
@@ -347,6 +352,29 @@ def fetch_fast(url, start, end):
     except Exception:
         pass
     return [], [], "fast-exhausted"
+
+
+def sweep_sections(url, stamp, cap, sections):
+    """ADDITIVE layer — independent of, and additional to, the tier cascade.
+
+    Some outlets publish a feed AND bury most of their state reporting on
+    section pages the feed never lists (India Today NE's /rss/news.xml carries
+    11 sitewide items — often stale — while its 8 state sections carry ~90 live
+    ones). Because a working feed makes `fetch_fast` succeed, `fetch_slow` is
+    never reached and those section pages would go unread. This runs the section
+    crawl regardless of how the cascade resolved; results are merged and deduped
+    with everything else. It never replaces or short-circuits any existing tier.
+
+    Returns (candidates, status).
+    """
+    if not sections:
+        return [], "no-sections"
+    outlet = _outlet_from_url(url)
+    try:
+        cands = _crawl_dom(url, outlet, stamp, cap, sections, include_home=False)
+        return cands, (f"ok:sections({len(cands)})" if cands else "sections-empty")
+    except Exception as ex:
+        return [], f"sections-error:{type(ex).__name__}"
 
 
 def fetch_slow(url, stamp, cap, shot_state, sections=None):

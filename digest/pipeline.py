@@ -107,6 +107,30 @@ def run(config_path="config.yaml", verbose=True):
             c["trusted"] = trusted
             collected.append(c)
 
+    # Phase 3 — ADDITIVE section sweep. Runs *in addition to* Phases 1-2 and
+    # changes neither. A paper whose feed succeeded in Phase 1 never reaches the
+    # browser, so its state section pages would go unread even though the feed
+    # lists only a fraction of them (India Today NE: 11 sitewide, often stale,
+    # vs ~90 live across its 8 sections). Papers handled in Phase 2 already
+    # crawled their sections, so they are skipped here — no duplicate work.
+    slow_urls = {s[0] for s in slow}
+    sweep = [s for s in sources if s[4] and s[0] not in slow_urls]
+    if sweep:
+        n_sweep = 0
+        for src in sweep:
+            url, state, label, trusted, sections = src
+            cands, status = collector.sweep_sections(url, now_ist, crawl_cap, sections)
+            db.log_source(con, run_date, f"{label} [sections]", state or "AGG",
+                          status, len(cands))
+            _tier("sections-ok" if cands else "sections-none")
+            n_sweep += len(cands)
+            for c in cands:
+                if state:
+                    c["state"] = state
+                c["trusted"] = trusted
+                collected.append(c)
+        log(f"Section sweep: {len(sweep)} paper(s), {n_sweep} extra candidates")
+
     stats["sources"] = len(sources)
     log(f"Sources: {stats['src_ok']} ok / {stats['src_err']} failed | tiers {tier_counts}")
 
