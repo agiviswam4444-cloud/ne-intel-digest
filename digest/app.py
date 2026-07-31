@@ -3,7 +3,7 @@ import json, os, sys, subprocess, threading, datetime, time
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from . import db, pipeline, classifier, geo
+from . import db, pipeline, classifier, geo, actors
 
 app = FastAPI(title="NE Intel Digest")
 CFG = pipeline.load_config(os.environ.get("DIGEST_CONFIG", "config.yaml"))
@@ -171,6 +171,36 @@ def map_data(date: str = "", scope: str = "all"):
             "sections": {int(k): v["name"] for k, v in CFG["sections"].items()},
             "total": len(rows), "located": located,
             "unlocated": len(rows) - located}
+
+
+@app.get("/api/actors")
+def actors_data(days: int = 2, state: str = ""):
+    """ADDITIVE endpoint for the separate Actors tab. Reads the same stories
+    table but changes nothing about the digest/map endpoints or the pipeline.
+    `days` = how far back to look (1 = today only; larger values use the
+    history now preserved by retain_days)."""
+    con = _con()
+    latest = _latest_pub_date(con)
+    if not latest:
+        con.close()
+        return {"actors": [], "cooccurrence": [], "days": days, "from": "", "to": ""}
+    try:
+        start = (datetime.date.fromisoformat(latest)
+                 - datetime.timedelta(days=max(0, int(days) - 1))).isoformat()
+    except Exception:
+        start = latest
+    q = ("SELECT headline,summary,url,outlet,state,pub_date,pub_time_ist "
+         "FROM stories WHERE pub_date BETWEEN ? AND ?")
+    args = [start, latest]
+    if state:
+        q += " AND state=?"
+        args.append(state)
+    rows = [dict(r) for r in con.execute(q + " ORDER BY pub_date DESC, pub_time_ist DESC", args)]
+    con.close()
+    out = actors.analyse(rows)
+    out.update({"days": days, "from": start, "to": latest,
+                "total_stories": len(rows), "state": state})
+    return out
 
 
 @app.post("/api/run")

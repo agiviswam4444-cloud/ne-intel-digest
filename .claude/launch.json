@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "digest-dashboard",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["run.py", "serve"],
+      "port": 8642
+    }
+  ]
+}

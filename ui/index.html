@@ -137,6 +137,7 @@ summary{cursor:pointer;padding:8px 4px;color:var(--subtext);font-weight:600}
 <nav id="tabs">
   <a data-tab="console" class="active">Console</a>
   <a data-tab="map">Map</a>
+  <a data-tab="actors">Actors</a>
   <a data-tab="stories">All Stories</a>
   <a data-tab="sections">By Section</a>
   <a data-tab="sources">Source Status</a>
@@ -221,6 +222,7 @@ function render(){
   if(!D||!D.stories){c.innerHTML='<div class="empty">No data.</div>';return}
   if(tab==="console")c.innerHTML=consoleView();
   else if(tab==="map")renderMap();
+  else if(tab==="actors")renderActors();
   else if(tab==="stories")c.innerHTML=allStories();
   else if(tab==="sections")c.innerHTML=bySection();
   else if(tab==="sources")c.innerHTML=sources();
@@ -335,6 +337,85 @@ async function renderMap(){
   });
   setTimeout(()=>mapObj&&mapObj.invalidateSize(),60);
 }
+
+// ---------- Actors tab (self-contained; touches no other view) ----------
+let actorDays=2, actorCat="ALL", actorOpen=null, actorData=null;
+const CATCOL={"Armed group":"var(--crit)","Civil society":"var(--accent2)",
+  "Security force":"var(--high)","Government / political":"var(--med)",
+  "Peace process":"var(--green)"};
+
+function spark(days){
+  const ks=Object.keys(days).sort(), vs=ks.map(k=>days[k]);
+  if(!vs.length)return"";
+  const mx=Math.max(...vs);
+  return ks.map(k=>{
+    const h=Math.max(2,Math.round(14*days[k]/mx));
+    return `<span title="${k}: ${days[k]}" style="display:inline-block;width:6px;height:${h}px;
+      background:var(--accent);margin-right:2px;vertical-align:bottom;border-radius:1px"></span>`;
+  }).join("");
+}
+
+function actorCard(a){
+  const col=CATCOL[a.category]||"var(--muted)";
+  const st=Object.entries(a.states).slice(0,5)
+    .map(([s,n])=>`<span class="badge">${s} ${n}</span>`).join(" ");
+  const open=actorOpen===a.key;
+  const list=open?`<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px">
+      ${a.stories.map(s=>`<div class="pincident">
+        <a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.summary||s.headline||"")}</a>
+        <div class="pmeta mono">${s.pub_date||""} ${s.pub_time_ist&&s.pub_time_ist!=="unknown"?"· "+s.pub_time_ist:""}
+          ${s.outlet?"· "+esc(s.outlet):""} ${s.state?"· "+s.state:""}</div></div>`).join("")}
+    </div>`:"";
+  return `<div class="card" style="border-left:3px solid ${col};cursor:pointer" data-actor="${a.key}">
+    <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+      <b style="font-size:15px">${esc(a.name)}</b>
+      <span class="badge" style="color:${col};border-color:${col}">${esc(a.category)}</span>
+      <span style="margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:19px">${a.count}</span>
+    </div>
+    <div style="margin-top:6px;display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+      ${st}<span style="margin-left:auto">${spark(a.days)}</span>
+    </div>
+    <div class="ts mono" style="margin-top:6px">${Object.keys(a.outlets).slice(0,4).map(esc).join(" · ")}</div>
+    ${list}</div>`;
+}
+
+async function renderActors(){
+  const c=$("#content");
+  c.innerHTML='<div class="empty">Loading actors…</div>';
+  const q=`?days=${actorDays}`+(stateFilterActor&&stateFilterActor!=="ALL"?`&state=${stateFilterActor}`:"");
+  try{ actorData=await (await fetch("/api/actors"+q)).json(); }
+  catch(e){ c.innerHTML='<div class="empty">Could not load actors.</div>'; return; }
+  const D2=actorData;
+  const cats=["ALL",...(D2.categories||[])];
+  const shown=(D2.actors||[]).filter(a=>actorCat==="ALL"||a.category===actorCat);
+  const co=(D2.cooccurrence||[]).length
+    ? `<h2>Co-occurrence (actors named in the same story)</h2><div class="card">
+        ${D2.cooccurrence.map(x=>`<div class="story"><span class="head">${esc(x.a)} <span style="color:var(--muted)">+</span> ${esc(x.b)}</span>
+          <span class="badge">${x.n}</span></div>`).join("")}</div>`
+    : `<h2>Co-occurrence</h2><div class="card"><div class="empty" style="padding:14px">
+        No repeated actor pairs yet — this fills in as more history accumulates.</div></div>`;
+  c.innerHTML=`
+    <div class="filterbar">
+      ${[1,2,7,30].map(d=>`<button data-days="${d}" class="${actorDays===d?"on":""}">${d===1?"Today":d+" days"}</button>`).join("")}
+      <span style="width:14px"></span>
+      ${["ALL",...STATE_ORDER.filter(s=>s!=="MULTI")].map(s=>
+        `<button data-astate="${s}" class="${(stateFilterActor||"ALL")===s?"on":""}">${s}</button>`).join("")}
+    </div>
+    <div class="filterbar">
+      ${cats.map(k=>`<button data-cat="${esc(k)}" class="${actorCat===k?"on":""}">${esc(k)}</button>`).join("")}
+    </div>
+    <div id="mapstats" class="mono">${shown.length} actor(s) across ${D2.total_stories} stories · ${D2.from} → ${D2.to}${D2.state?" · "+D2.state:""} — click an actor to see its stories</div>
+    ${shown.length?shown.map(actorCard).join(""):'<div class="empty">No tracked actors mentioned in this window.</div>'}
+    ${co}`;
+  $$("[data-days]").forEach(b=>b.onclick=()=>{actorDays=+b.dataset.days;actorOpen=null;renderActors()});
+  $$("[data-cat]").forEach(b=>b.onclick=()=>{actorCat=b.dataset.cat;renderActors()});
+  $$("[data-astate]").forEach(b=>b.onclick=()=>{stateFilterActor=b.dataset.astate;actorOpen=null;renderActors()});
+  $$("[data-actor]").forEach(el=>el.onclick=ev=>{
+    if(ev.target.tagName==="A")return;           // let story links open normally
+    actorOpen=actorOpen===el.dataset.actor?null:el.dataset.actor; renderActors();
+  });
+}
+let stateFilterActor="ALL";
 
 // ---------- wiring ----------
 $("#tabs").onclick=e=>{
