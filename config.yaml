@@ -19,7 +19,13 @@ auto_refresh_minutes: 30
 # Keep stories (and per-run logs) from the last N days; older rows are pruned
 # at the start of each run so the database does not grow without bound.
 # 0 = keep everything forever.
-retain_days: 7
+#
+# 90 days = the history needed for trend / escalation analysis (comparing today
+# against a rolling baseline). At ~900 stories/day this is ~80k rows — trivial
+# for SQLite (a few tens of MB). The dashboard itself still shows only the
+# today+yesterday window; this history is what makes "is this getting worse?"
+# answerable. Do NOT lower this back to 7 unless you want that history deleted.
+retain_days: 90
 
 # Crawled/screenshot items (papers with no RSS feed) have no publish date.
 # Stamp them with the collection time so they land in the today/yesterday
