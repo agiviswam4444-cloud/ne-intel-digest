@@ -289,7 +289,22 @@ def _crawl_dom(url, outlet, stamp, cap, sections=None, include_home=True):
                         "a", "els => els.map(e => ({t:(e.innerText||'').trim(), h:e.href}))")
                 except Exception:
                     continue                      # one bad section never kills the rest
+                before = len(out)
                 _harvest(anchors, outlet, stamp, seen, out, page_cap)
+                # Iframe fallback — ONLY when the top frame yielded nothing for
+                # this page. Some outlets (e.g. Nagaland Page) render the whole
+                # site inside an iframe, which the top-frame query cannot see.
+                # Scoped this way so every page that already works is untouched.
+                if len(out) == before:
+                    for fr in page.frames[1:]:
+                        try:
+                            fa = fr.eval_on_selector_all(
+                                "a", "els => els.map(e => ({t:(e.innerText||'').trim(), h:e.href}))")
+                        except Exception:
+                            continue
+                        _harvest(fa, outlet, stamp, seen, out, page_cap)
+                        if len(out) > before:
+                            break
         finally:
             browser.close()
     return out
@@ -382,13 +397,20 @@ def fetch_slow(url, stamp, cap, shot_state, sections=None):
     thread-safe). Crawls homepage + `sections`. Items are stamped with `stamp`
     (capture time). Returns (candidates, status)."""
     outlet = _outlet_from_url(url)
-    # TIER 2 — headless-Chrome DOM crawl (homepage + section pages)
-    try:
-        cands = _crawl_dom(url, outlet, stamp, cap, sections)
-        if cands:
-            return cands, "ok:crawl"
-    except Exception:
-        pass
+    # TIER 2 — headless-Chrome DOM crawl (homepage + section pages).
+    # One retry ONLY if the first attempt produced nothing: a site can fail on a
+    # transient timeout while several crawls compete for the network (observed
+    # with E-Pao, which crawls fine in isolation). A source that already returns
+    # items never reaches the retry, so working sources are unaffected.
+    for attempt in (1, 2):
+        try:
+            cands = _crawl_dom(url, outlet, stamp, cap, sections)
+            if cands:
+                return cands, "ok:crawl" if attempt == 1 else "ok:crawl-retry"
+        except Exception:
+            pass
+        if attempt == 1:
+            time.sleep(2)
     # TIER 3 — screenshot -> Claude vision (needs API key, budget-capped)
     if not ai.have_key():
         return [], "screenshot-skipped-no-key"

@@ -59,28 +59,50 @@ papers:
   - {name: "The Sentinel",     state: AS, url: "https://sentinelassam.com/feed/"}
   - {name: "Asomiya Pratidin", state: AS, url: "https://asomiyapratidin.in/rss"}
   - {name: "Niyomiya Barta",   state: AS, url: "https://niyomiyabarta.com/feed/"}
-  - {name: "Assam Chronicle",  state: AS, url: "https://assamchronicle.com"}
+  # DISABLED 2026-07-31: assamchronicle.com no longer serves the newspaper —
+  # the domain now returns a parked/spam page (0 links, title "Akses Login
+  # Sawithoki Gampng Jp"). Re-enable if the masthead returns.
+  # - {name: "Assam Chronicle",  state: AS, url: "https://assamchronicle.com"}
   - {name: "Dainik Agradoot",  state: AS, url: "https://www.agradoot.in"}
   # --- Nagaland ---
   - {name: "Nagaland Post",    state: NL, url: "https://nagalandpost.com/feed/"}
   - {name: "Morung Express",   state: NL, url: "https://morungexpress.com/feed/"}
   - {name: "Nagaland Tribune", state: NL, url: "https://nagalandtribune.in/feed/"}
   - {name: "Eastern Mirror",   state: NL, url: "https://easternmirrornagaland.com"}
-  - {name: "Nagaland Page",    state: NL, url: "https://nagalandpage.com"}
+  # DISABLED 2026-07-31: nagalandpage.com is a PARKED GoDaddy domain
+  # ("parked free, courtesy of GoDaddy.com") — it no longer hosts the paper.
+  # - {name: "Nagaland Page",    state: NL, url: "https://nagalandpage.com"}
   # --- Meghalaya ---
   - {name: "Shillong Times",   state: ML, url: "https://theshillongtimes.com/feed/"}
   - {name: "Meghalaya Monitor", state: ML, url: "https://meghalayamonitor.com/feed/"}
   - {name: "Highland Post",    state: ML, url: "https://highlandpost.com/feed/"}
   # --- Manipur (all feedless -> crawl) ---
   - {name: "The Sangai Express", state: MN, url: "https://www.thesangaiexpress.com"}
-  - {name: "Imphal Free Press",  state: MN, url: "https://ifp.co.in"}
-  - {name: "Hueiyen Lanpao",     state: MN, url: "https://hueiyenlanpao.com"}
+  # DISABLED 2026-07-31: ifp.co.in refuses connections from here (host
+  # unreachable), so no tier can fetch it directly — a screenshot cannot help a
+  # page that will not load. Read via the Google News index instead: see
+  # `site:ifp.co.in` under discovery_queries below.
+  # - {name: "Imphal Free Press",  state: MN, url: "https://ifp.co.in"}
+  # DISABLED 2026-07-31: the site itself returns "Site Under Maintenance"
+  # (0 links). Still a real Manipur daily, so it is read via
+  # `site:hueiyenlanpao.com` below; re-enable direct fetch when it is back.
+  # - {name: "Hueiyen Lanpao",     state: MN, url: "https://hueiyenlanpao.com"}
   # --- Mizoram (feedless -> crawl) ---
-  - {name: "The Mizoram Post",  state: MZ, url: "https://www.themizorampost.net"}
-  - {name: "Zozam Times",       state: MZ, url: "https://www.zozamtimes.in"}
+  # DISABLED 2026-07-31: themizorampost.net is an E-PAPER portal (PDF/page
+  # images, "E-papers for the new generation") — only 2 links carry real text,
+  # so there is no article HTML to extract and a screenshot would only capture
+  # page images. Read via `site:themizorampost.net` below.
+  # (NOTE: the separate, working mizorampost.com RSS feed is listed further down.)
+  # - {name: "The Mizoram Post",  state: MZ, url: "https://www.themizorampost.net"}
+  # DISABLED 2026-07-31: zozamtimes.in refuses connections from here (host
+  # unreachable). Read via `site:zozamtimes.in` under discovery_queries below.
+  # - {name: "Zozam Times",       state: MZ, url: "https://www.zozamtimes.in"}
   # --- Tripura (feedless -> crawl) ---
   - {name: "Tripura Times",       state: TR, url: "https://tripuratimes.com"}
-  - {name: "Daily Desher Katha",  state: TR, url: "https://www.dailydesherkatha.net"}
+  # DISABLED 2026-07-31: dailydesherkatha.net now resolves to a Wayback Machine
+  # "404 Page Not Found" shell, not the newspaper (its links are archive/gallery
+  # junk that would pollute the digest). Read via `site:dailydesherkatha.net`.
+  # - {name: "Daily Desher Katha",  state: TR, url: "https://www.dailydesherkatha.net"}
   # --- Arunachal Pradesh ---
   - {name: "Arunachal Times",   state: AR, url: "https://arunachaltimes.in/?feed=rss2"}
   - {name: "Echo of Arunachal", state: AR, url: "https://echoofarunachal.in"}
@@ -165,6 +187,15 @@ discovery_queries:
   - site:northeasttoday.in
   - site:thehansindia.com Northeast
   - site:prokerala.com Manipur OR Assam OR Nagaland
+  # Outlets whose own servers refuse our connections (see the disabled paper
+  # entries above) — reached through the aggregator index instead.
+  - site:ifp.co.in
+  - site:zozamtimes.in
+  # Real outlets that cannot be read directly (under maintenance, e-paper-only,
+  # or the domain no longer serves the paper) — kept in coverage via the index.
+  - site:hueiyenlanpao.com
+  - site:themizorampost.net
+  - site:dailydesherkatha.net
 
 # ------------------------------------------------------------------
 # STEP 1D — X API v2 (created_at trusted as-is). Optional.
