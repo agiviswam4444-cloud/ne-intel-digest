@@ -67,6 +67,11 @@ def run(config_path="config.yaml", verbose=True):
                 True, p.get("sections"))
                for p in cfg.get("papers", [])]
     sources += [(u, None, u, False, None) for u in cfg.get("aggregators", [])]
+    # Neighbourhood watch (CN/BD/MM). Same cascade, same tuple shape — they are
+    # separated from NE only by their state code, and are defence-filtered later.
+    sources += [(p["url"], p.get("state"), p.get("name") or p["url"],
+                 True, p.get("sections"))
+                for p in cfg.get("foreign_papers", [])]
 
     shot_state = {"used": 0, "max": cfg.get("tier4_max_sites", 5)}
     crawl_cap = cfg.get("crawl_max_items", 14)
@@ -165,6 +170,27 @@ def run(config_path="config.yaml", verbose=True):
                 n_disc += len(cands)
         log(f"Discovery: {len(disc)} searches, {n_disc} candidates")
 
+    # ---- Neighbourhood-watch discovery (CN/BD/MM). Separate from the NE
+    #      discovery net above so NE behaviour is untouched; results carry their
+    #      region's state code and are defence-filtered below. ----
+    fq = cfg.get("foreign_queries", [])
+    if fq:
+        def _fq(item):
+            cands, status = collector.fetch_news_rss(
+                collector.google_news_url(item["q"]), item["q"])
+            return item, cands, status
+        n_fq = 0
+        with cf.ThreadPoolExecutor(6) as ex:
+            for item, cands, status in ex.map(_fq, fq):
+                db.log_source(con, run_date, f"watch: {item['q']}",
+                              item.get("state") or "FGN", status, len(cands))
+                for c in cands:
+                    c["state"] = item.get("state")
+                    c["trusted"] = True      # region is known from the query
+                    collected.append(c)
+                n_fq += len(cands)
+        log(f"Neighbourhood watch: {len(fq)} searches, {n_fq} candidates")
+
     # ---- Dedup by URL, then by normalized headline (collapses the same story
     #      seen via multiple outlets / the Google redirect; first seen wins,
     #      and papers are ordered before discovery so real URLs win). ----
@@ -240,6 +266,25 @@ def run(config_path="config.yaml", verbose=True):
         kept.append(c)
     stats["candidates"] = len(kept)
     log(f"In NE-scope: {len(kept)} (dropped {out_of_scope} out-of-scope aggregator items)")
+
+    # ---- Defence-relevance gate — CN/BD/MM ONLY. NE-state stories never enter
+    #      this loop (their state code is not in FOREIGN_STATES), so NE columns
+    #      behave exactly as before. Those outlets carry mostly economy/culture,
+    #      so without this the three new columns would bury the signal. ----
+    if cfg.get("defence_keywords"):
+        keep2, dropped_fgn = [], 0
+        for c in kept:
+            if c.get("state") in classifier.FOREIGN_STATES:
+                text = (c["headline"] or "") + " " + (c.get("summary") or "")
+                if not classifier.is_defence_relevant(text, cfg):
+                    dropped_fgn += 1
+                    db.log_excluded(con, run_date, c["url"], "not-defence-relevant")
+                    continue
+            keep2.append(c)
+        fgn = sum(1 for c in keep2 if c.get("state") in classifier.FOREIGN_STATES)
+        kept = keep2
+        stats["candidates"] = len(kept)
+        log(f"Defence filter (CN/BD/MM): kept {fgn}, dropped {dropped_fgn} non-defence")
 
     # ---- Classify -> (optional AI summaries) -> store ----
     to_store = []

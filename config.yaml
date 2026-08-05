@@ -165,6 +165,76 @@ aggregators:
   - https://indianexpress.com/section/north-east-india/feed/
 
 # ------------------------------------------------------------------
+# ==================================================================
+# NEIGHBOURHOOD WATCH — China / Bangladesh / Myanmar.
+# These flow through the SAME cascade as the NE papers, but are filtered by
+# `defence_keywords` below: unlike the NE states (where every story is wanted),
+# these outlets carry mostly economy/culture/sport, so only defence/security
+# stories are kept. NE collection is completely unaffected by this section.
+# ==================================================================
+foreign_papers:
+  # ---- China (state media = official line; others = independent reporting) ----
+  - {name: "China Daily",        state: CN, url: "https://www.chinadaily.com.cn/rss/china_rss.xml"}
+  - {name: "CGTN",               state: CN, url: "https://cgtn.com/subscribe/rss/section/china.xml"}
+  - {name: "People's Daily",     state: CN, url: "https://en.people.cn/rss/China.xml"}
+  - {name: "Xinhua",             state: CN, url: "https://english.news.cn/rss/worldrss.xml"}
+  - {name: "SCMP",               state: CN, url: "https://scmp.com/rss/4/feed"}
+  - {name: "The Diplomat",       state: CN, url: "https://thediplomat.com/feed/"}
+  - {name: "War on the Rocks",   state: CN, url: "https://warontherocks.com/feed/"}
+  - {name: "Jamestown Foundation", state: CN, url: "https://jamestown.org/feed/"}
+  - {name: "Defense News",       state: CN, url: "https://defensenews.com/arc/outboundfeeds/rss/"}
+  - {name: "Asia Times",         state: CN, url: "https://asiatimes.com/feed/"}
+  - {name: "Taipei Times",       state: CN, url: "https://taipeitimes.com/xml/index.rss"}
+  - {name: "RFA English",        state: CN, url: "https://rfa.org/english/rss2.xml"}
+  - {name: "Bharat Shakti",      state: CN, url: "https://bharatshakti.in/feed/"}
+  - {name: "StratNews Global",   state: CN, url: "https://stratnewsglobal.com/feed/"}
+  # ---- Bangladesh ----
+  - {name: "The Business Standard", state: BD, url: "https://tbsnews.net/rss.xml"}
+  - {name: "The Daily Star",     state: BD, url: "https://thedailystar.net/rss.xml"}
+  - {name: "Prothom Alo English", state: BD, url: "https://en.prothomalo.com/feed"}
+  # ---- Myanmar ----
+  - {name: "RFA Burmese",        state: MM, url: "https://rfa.org/burmese/rss2.xml"}
+  - {name: "Myanmar Now",        state: MM, url: "https://myanmar-now.org/en/feed/"}
+  - {name: "DVB",                state: MM, url: "https://english.dvb.no/feed/"}
+  - {name: "Burma News Intl",    state: MM, url: "https://bnionline.net/en/rss.xml"}
+  - {name: "Mizzima",            state: MM, url: "https://eng.mizzima.com/feed/"}
+
+# Google News topic + site: queries for these regions. Topic queries catch
+# defence news from ANY outlet; site: queries reach outlets that block us
+# directly (Global Times, Irrawaddy, Dhaka Tribune, ISPR...).
+foreign_queries:
+  # ---- China ----
+  - {state: CN, q: "PLA China military exercise OR drill OR incursion"}
+  - {state: CN, q: "China defence ministry PLA Arunachal OR LAC OR Tibet"}
+  - {state: CN, q: "China PLA Navy OR Air Force OR missile OR satellite deployment"}
+  - {state: CN, q: "site:globaltimes.cn military OR PLA"}
+  - {state: CN, q: "China Bhutan OR Nepal OR Myanmar border infrastructure military"}
+  # ---- Bangladesh ----
+  - {state: BD, q: "Bangladesh Army exercise OR procurement OR modernisation"}
+  - {state: BD, q: "site:ispr.gov.bd"}
+  - {state: BD, q: "site:dhakatribune.com army OR defence OR BGB"}
+  - {state: BD, q: "Bangladesh BGB border India OR Myanmar security"}
+  - {state: BD, q: "Bangladesh Navy OR Air Force China OR India defence deal"}
+  # ---- Myanmar ----
+  - {state: MM, q: "Myanmar military junta offensive OR airstrike OR ceasefire"}
+  - {state: MM, q: "Myanmar Arakan Army OR TNLA OR MNDAA offensive"}
+  - {state: MM, q: "site:irrawaddy.com"}
+  - {state: MM, q: "Myanmar India border Chin State OR Sagaing security"}
+
+# Defence-relevance gate for the three regions above ONLY (never applied to
+# the NE states). A story must mention at least one of these to be kept.
+defence_keywords:
+  [pla, "people's liberation army", military, army, navy, naval, air force,
+   defence, defense, troops, soldier, missile, warship, submarine, aircraft,
+   fighter jet, drone, radar, satellite, nuclear, weapon, arms, artillery,
+   exercise, drill, wargame, deployment, incursion, intrusion, border, lac,
+   "line of actual control", pla navy, plaaf, mod, "ministry of defence",
+   security, insurgent, militant, junta, tatmadaw, coup, offensive, airstrike,
+   ceasefire, "arakan army", tnla, mndaa, "ethnic armed", bgb, "border guard",
+   ispr, procurement, modernisation, modernization, "defence deal", geopolitic,
+   strategic, intelligence, espionage, spy, sanction, "war ", conflict, clash,
+   ccp, "communist party", xi jinping, taiwan, "south china sea", himalaya]
+
 # Topic discovery net — Google News keyword searches. This is the safety net
 # that catches NE news carried by ANY outlet (national, obscure, or simply not
 # in the list above): a story that is "in open source" but on a paper we don't

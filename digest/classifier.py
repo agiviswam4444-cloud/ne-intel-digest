@@ -28,6 +28,23 @@ def in_ne_scope(text, cfg):
     return bool(_SCOPE_RE.search(text or ""))
 
 
+# Regions covered as "neighbourhood watch" rather than as NE states. Stories
+# from these are kept ONLY if they are defence/security relevant (see
+# is_defence_relevant); NE-state stories are unaffected by this.
+FOREIGN_STATES = {"CN", "BD", "MM"}
+
+
+def is_defence_relevant(text, cfg):
+    """True if `text` matches a defence_keywords entry. Applied ONLY to the
+    CN/BD/MM feeds — those outlets carry mostly economy/culture/sport, which
+    would otherwise bury the signal. NE-state collection never calls this."""
+    kws = cfg.get("defence_keywords") or []
+    if not kws:
+        return True                      # no list configured -> keep everything
+    t = (text or "").lower()
+    return any(k.lower() in t for k in kws)
+
+
 def state_from_url(url, cfg):
     """Derive the state from an article URL's section path, e.g.
     indiatodayne.in/tripura/story/... -> TR. Multi-state outlets must NOT be
