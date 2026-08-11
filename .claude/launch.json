@@ -3,9 +3,10 @@
   "configurations": [
     {
       "name": "digest-dashboard",
-      "runtimeExecutable": "python3",
+      "runtimeExecutable": "/Library/Frameworks/Python.framework/Versions/3.12/bin/python3",
       "runtimeArgs": ["run.py", "serve"],
-      "port": 8642
+      "port": 8642,
+      "autoPort": false
     }
   ]
 }

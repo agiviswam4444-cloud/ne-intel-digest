@@ -5,6 +5,7 @@ lat/lon + state. geolocate() scans a story's headline+summary for the most
 specific place name mentioned and returns its coordinates. "Precise places
 only": a story with no recognized place returns None and is left off the map.
 """
+import os
 import re
 
 # name -> (lat, lon, state_code).  Names are matched case-insensitively as whole
@@ -88,25 +89,94 @@ _ENTRIES = sorted(GAZETTEER.items(), key=lambda kv: -len(kv[0]))
 _PATTERNS = [(re.compile(r"\b" + re.escape(name) + r"\b"), name, coord)
              for name, coord in _ENTRIES]
 
+# ---------------------------------------------------------------------------
+# Imported gazetteer (GeoNames, CC-BY 4.0) — thousands of NE settlements and
+# districts. The hand-curated GAZETTEER above stays authoritative: it holds the
+# security-relevant hotspots (Moreh, Zokhawthar, Kamjong...) with vetted
+# coordinates, and is consulted first. This bulk layer only fills the long tail.
+#
+# Matching is TOKEN-based, not regex-per-place: at ~3,300 entries a regex scan
+# per place per story would be ~10M searches per run. Instead we slide 1-3 word
+# windows over the text and look them up in a dict — O(words), not O(places).
+# ---------------------------------------------------------------------------
+_BULK = {}
+_BULK_MAXWORDS = 1
 
-def geolocate(text):
+
+def _load_bulk():
+    global _BULK_MAXWORDS
+    path = os.path.join(os.path.dirname(__file__), "gazetteer_ne.tsv")
+    try:
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("#"):
+                    continue
+                p = line.rstrip("\n").split("\t")
+                if len(p) < 4:
+                    continue
+                name = p[0]
+                if name in GAZETTEER:      # curated entry wins
+                    continue
+                _BULK[name] = (float(p[1]), float(p[2]), p[3])
+                _BULK_MAXWORDS = max(_BULK_MAXWORDS, len(name.split()))
+    except FileNotFoundError:
+        pass                                # bulk layer is optional
+
+
+_load_bulk()
+
+_WORD = re.compile(r"[a-z][a-z'\-]+")
+
+
+def _bulk_lookup(low, block=frozenset()):
+    """Longest-match place name found in `low` via 1..N word windows."""
+    words = _WORD.findall(low)
+    best = None
+    for n in range(_BULK_MAXWORDS, 0, -1):
+        for i in range(len(words) - n + 1):
+            cand = " ".join(words[i:i + n])
+            if cand in block:
+                continue
+            hit = _BULK.get(cand)
+            if hit:
+                if best is None or len(cand) > len(best[0]):
+                    best = (cand, hit)
+        if best:                            # prefer the longest window length
+            break
+    return best
+
+
+# Bulk names that are also common surnames / ordinary words / famous non-NE
+# places. Matching these in free text produces nonsense ("Sri Lanka" -> a town
+# in Assam, "mandate singing of" -> a village in Arunachal, "CM Sangma" -> a
+# hamlet). Curated entries are unaffected.
+_BULK_BLOCK = {"lanka", "singing", "sangma", "marak", "momin", "sangmа", "raipur",
+               "kalita", "gogoi", "hazarika", "saikia", "boro", "basumatary",
+               "rabha", "brahma", "narzary", "daimary", "swargiary", "terang",
+               "phukan", "dutta", "bora", "nath", "das", "deka", "kachari"}
+
+
+def geolocate(text, expect_state=None):
     """Return (lat, lon, place_display, state) for the most specific place named
-    in `text`, or None. Longest gazetteer name wins; ties broken by position."""
+    in `text`, or None.
+
+    The curated gazetteer is authoritative and checked first. The imported
+    GeoNames layer then fills the long tail, but ONLY when its state agrees with
+    `expect_state` (the story's own state tag) — without that corroboration a
+    bulk name like "Lanka" or "Raipur" matches unrelated national news. Callers
+    that pass no expect_state get curated hits only from the bulk layer's
+    perspective, which is the safe default."""
     if not text:
         return None
     low = text.lower()
-    best = None   # (name_len, position, name, coord)
-    for pat, name, coord in _PATTERNS:
-        m = pat.search(low)
-        if m:
-            # longest-first iteration: first (longest) hit that exists wins,
-            # but prefer an earlier-positioned equally-long name.
-            cand = (len(name), m.start(), name, coord)
-            if best is None or len(name) > best[0]:
-                best = cand
-                # a strictly longer name can't be beaten by shorter ones
-                break
-    if best is None:
-        return None
-    name, (lat, lon, state) = best[2], best[3]
-    return lat, lon, name.title(), state
+    for pat, name, coord in _PATTERNS:      # curated: longest-first, trusted
+        if pat.search(low):
+            lat, lon, state = coord
+            return lat, lon, name.title(), state
+    hit = _bulk_lookup(low, block=_BULK_BLOCK)
+    if hit:
+        name, (lat, lon, state) = hit
+        # require the story's own state to corroborate the bulk match
+        if expect_state and state == expect_state:
+            return lat, lon, name.title(), state
+    return None
