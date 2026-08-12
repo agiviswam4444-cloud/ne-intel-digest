@@ -32,6 +32,13 @@ retain_days: 90
 # window. Cap how many links to take per crawled site (across all its pages).
 crawl_max_items: 40
 
+# Location enrichment: for stories with no place in the headline/summary, fetch
+# the article and look for the dateline ("IMPHAL, Aug 5:") / body location.
+# Security sections are enriched first. Capped so a slow site cannot stall the
+# 30-minute cycle; 0 disables enrichment entirely.
+enrich_max_per_run: 60
+enrich_days: 3
+
 paths:
   db: "data/digest.db"
   json_out: "data/archive"   # fallback JSON per run

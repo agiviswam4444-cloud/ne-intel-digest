@@ -2,7 +2,7 @@
 import os, re, time, json, datetime, concurrent.futures as cf
 import yaml
 
-from . import db, collector, verifier, classifier, ai
+from . import db, collector, verifier, classifier, ai, geo, enrich
 
 IST = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
 
@@ -308,6 +308,14 @@ def run(config_path="config.yaml", verbose=True):
             "run_date": run_date,
         })
 
+    # Geolocate from headline+summary at store time (cheap, no network) so the
+    # coordinates are persisted and radius queries never re-run the gazetteer.
+    for s in to_store:
+        hit = geo.geolocate((s["headline"] or "") + " " + (s["summary"] or ""),
+                            s.get("state"))
+        if hit:
+            s["lat"], s["lon"], s["place"], s["geo_src"] = hit[0], hit[1], hit[2], "headline"
+
     ai_used = False
     if cfg.get("ai_summaries"):
         ai_used = ai.summarize_batch(to_store)   # mutates summary in place
@@ -317,6 +325,14 @@ def run(config_path="config.yaml", verbose=True):
     for s in to_store:
         if db.upsert_story(con, s):
             final += 1
+
+    # Location enrichment — fetch article bodies for stories still unlocated
+    # (security sections first). Capped, runs after storage, and any failure
+    # here can never affect what was already collected.
+    try:
+        enrich.enrich_locations(con, cfg, log)
+    except Exception as e:
+        log(f"Location enrichment skipped: {type(e).__name__}: {e}")
 
     audit = {**stats, **{f"g_{k}": v for k, v in gstats.items()},
              "out_of_scope": out_of_scope, "tiers": tier_counts,
