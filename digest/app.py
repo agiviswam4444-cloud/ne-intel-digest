@@ -173,6 +173,93 @@ def map_data(date: str = "", scope: str = "all"):
             "unlocated": len(rows) - located}
 
 
+def _haversine_km(lat1, lon1, lat2, lon2):
+    from math import radians, sin, cos, asin, sqrt
+    dlat = radians(lat2 - lat1)
+    dlon = radians(lon2 - lon1)
+    a = (sin(dlat / 2) ** 2
+         + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon / 2) ** 2)
+    return 2 * 6371.0 * asin(sqrt(a))
+
+
+@app.get("/api/geosearch")
+def geosearch(q: str = ""):
+    """Place-name lookup for centring the radius circle. Searches the curated
+    gazetteer first, then the imported GeoNames layer."""
+    q = (q or "").strip().lower()
+    if len(q) < 3:
+        return {"results": []}
+    out = []
+    for name, (lat, lon, st) in geo.GAZETTEER.items():
+        if q in name:
+            out.append({"place": name.title(), "lat": lat, "lon": lon,
+                        "state": st, "src": "curated"})
+    for name, (lat, lon, st) in geo._BULK.items():
+        if len(out) >= 40:
+            break
+        if q in name:
+            out.append({"place": name.title(), "lat": lat, "lon": lon,
+                        "state": st, "src": "geonames"})
+    # exact/prefix matches first, then shortest names
+    out.sort(key=lambda r: (not r["place"].lower().startswith(q), len(r["place"])))
+    return {"results": out[:25]}
+
+
+@app.get("/api/radius")
+def radius(lat: float, lon: float, km: float = 30, days: int = 7,
+           scope: str = "all"):
+    """Area-of-interest search: every located story within `km` of a point.
+
+    `days` counts back from the newest publication date (1 = today only,
+    0 = the entire archive). scope='security' limits to sections 1-10.
+    Only stories WITH stored coordinates can participate — roughly a third of
+    the archive; the response reports that so the UI can be honest about it."""
+    con = _con()
+    latest = _latest_pub_date(con)
+    args, where = [], ["lat IS NOT NULL"]
+    if days and days > 0 and latest:
+        start = (datetime.date.fromisoformat(latest)
+                 - datetime.timedelta(days=max(0, int(days) - 1))).isoformat()
+        where.append("pub_date >= ?")
+        args.append(start)
+    else:
+        start = ""
+    if scope == "security":
+        where.append("section BETWEEN 1 AND 10")
+    rows = [dict(r) for r in con.execute(
+        "SELECT headline,summary,url,outlet,state,section,pub_date,pub_time_ist,"
+        "lat,lon,place,geo_src FROM stories WHERE " + " AND ".join(where), args)]
+    con.close()
+
+    hits = []
+    for r in rows:
+        d = _haversine_km(lat, lon, r["lat"], r["lon"])
+        if d <= km:
+            r["distance_km"] = round(d, 1)
+            r["severity"] = _severity(r)
+            hits.append(r)
+    hits.sort(key=lambda r: (r["distance_km"],
+                             r["pub_date"] or "", r["pub_time_ist"] or ""))
+
+    # group by location so the map draws one marker per place
+    pts = {}
+    for h in hits:
+        key = (round(h["lat"], 4), round(h["lon"], 4))
+        p = pts.setdefault(key, {"lat": h["lat"], "lon": h["lon"],
+                                 "place": h["place"], "state": h["state"],
+                                 "distance_km": h["distance_km"], "incidents": []})
+        p["incidents"].append(h)
+    order = {"CRITICAL": 3, "HIGH": 2, "MEDIUM": 1, "LOW": 0}
+    for p in pts.values():
+        p["severity"] = max((i["severity"] for i in p["incidents"]),
+                            key=lambda s: order.get(s, 0))
+    return {"center": {"lat": lat, "lon": lon}, "km": km, "days": days,
+            "scope": scope, "from": start, "to": latest,
+            "total": len(hits), "locations": len(pts),
+            "points": sorted(pts.values(), key=lambda p: p["distance_km"]),
+            "stories": hits[:200]}
+
+
 @app.get("/api/actors")
 def actors_data(days: int = 2, state: str = ""):
     """ADDITIVE endpoint for the separate Actors tab. Reads the same stories

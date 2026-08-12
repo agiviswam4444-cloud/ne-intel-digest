@@ -303,42 +303,149 @@ function popupHtml(p){
   return `<div class="ppop"><div class="ptitle">${esc(p.place)} <span class="pstate">${p.state}</span> · ${p.incidents.length} incident${p.incidents.length>1?"s":""}</div>${rows}</div>`;
 }
 
-async function renderMap(){
-  $("#content").innerHTML=`
+// ---- Area-of-interest state (radius search) ----
+let aoi=null;            // {lat,lon,label} centre of the circle
+let aoiKm=30, aoiDays=7; // radius + time depth
+let circleLayer=null, aoiMarkers=[], baseLayer=null;
+
+function aoiControls(){
+  return `
     <div class="mapscope">
       <button data-scope="all" class="${mapScope==="all"?"on":""}">All news</button>
       <button data-scope="security" class="${mapScope==="security"?"on":""}">Security only</button>
+      <span style="width:18px"></span>
+      <input id="aoiSearch" type="search" placeholder="Search a place (e.g. Moreh)…"
+             style="min-width:190px" autocomplete="off">
+      <span id="aoiSug" class="ts mono"></span>
     </div>
-    <div id="mapstats" class="mono">Loading map…</div><div id="map"></div>
+    <div class="mapscope">
+      <span class="ts mono" style="align-self:center">Radius</span>
+      ${[10,30,50,100].map(k=>`<button data-km="${k}" class="${aoiKm===k?"on":""}">${k} km</button>`).join("")}
+      <span style="width:14px"></span>
+      <span class="ts mono" style="align-self:center">Period</span>
+      ${[[1,"Today"],[2,"2d"],[7,"7d"],[30,"30d"],[0,"All"]].map(([d,l])=>
+        `<button data-days="${d}" class="${aoiDays===d?"on":""}">${l}</button>`).join("")}
+      ${aoi?`<button id="aoiClear" style="margin-left:auto">✕ Clear circle</button>`:""}
+    </div>`;
+}
+
+async function renderMap(){
+  $("#content").innerHTML=`
+    ${aoiControls()}
+    <div id="mapstats" class="mono">Loading map…</div>
+    <div id="map"></div>
     <div class="maplegend">
       <span><span class="dot" style="background:${SEVCOL.CRITICAL}"></span>Critical</span>
       <span><span class="dot" style="background:${SEVCOL.HIGH}"></span>High</span>
       <span><span class="dot" style="background:${SEVCOL.MEDIUM}"></span>Medium</span>
       <span><span class="dot" style="background:${SEVCOL.LOW}"></span>Low</span>
-      <span>Dot size = number of incidents · click a dot for details</span>
-    </div>`;
-  $$(".mapscope button").forEach(b=>b.onclick=()=>{mapScope=b.dataset.scope;renderMap();});
+      <span><b>Click anywhere on the map</b> to drop a circle and see everything inside it.</span>
+    </div>
+    <div id="aoiList"></div>`;
+  wireMapControls();
+
   const q=`?scope=${mapScope}`+(D.date?`&date=${D.date}`:"");
   const [data, gj] = await Promise.all([
     fetch("/api/map"+q).then(r=>r.json()),
     fetch("/vendor/ne_states.geojson").then(r=>r.json()),
   ]);
-  const one=data.located===1;
-  const noun=mapScope==="security"?(one?"security incident":"security incidents"):(one?"story":"stories");
-  $("#mapstats").textContent=`${data.located} ${noun} plotted at ${data.points.length} location${data.points.length===1?"":"s"} — ${data.unlocated} without a recognized place (not shown) · ${data.total} total ${mapScope==="security"?"security ":""}stories · ${data.date}`;
+  if(!aoi){
+    const noun=mapScope==="security"?"security incidents":"stories";
+    $("#mapstats").textContent=`${data.located} ${noun} at ${data.points.length} locations — ${data.unlocated} without a recognised place (not shown) · click the map to start an area search`;
+  }
   if(mapObj){mapObj.remove();mapObj=null;}
-  mapObj=L.map("map",{attributionControl:false,minZoom:5,maxZoom:11});
-  const base=L.geoJSON(gj,{style:{color:"#3d4450",weight:1.2,fillColor:"#161b22",fillOpacity:.65}}).addTo(mapObj);
-  base.bindTooltip(l=>l.feature.properties.name,{sticky:true});
-  mapObj.fitBounds(base.getBounds(),{padding:[16,16]});
-  mapObj.setMaxBounds(base.getBounds().pad(0.5));
+  mapObj=L.map("map",{attributionControl:true,minZoom:4,maxZoom:14});
+  // Street-level tiles (online). The bundled GeoJSON outline stays underneath
+  // so the map is still readable if the tile server is unreachable.
+  baseLayer=L.geoJSON(gj,{style:{color:"#3d4450",weight:1.2,fillColor:"#161b22",fillOpacity:.55}}).addTo(mapObj);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    {maxZoom:19, opacity:.55, attribution:"© OpenStreetMap"}).addTo(mapObj);
+  mapObj.fitBounds(baseLayer.getBounds(),{padding:[16,16]});
+
   data.points.forEach(p=>{
     const col=SEVCOL[p.severity]||SEVCOL.LOW;
-    L.circleMarker([p.lat,p.lon],{radius:6+Math.min(p.incidents.length*2,12),
-      color:col,weight:2,fillColor:col,fillOpacity:.6})
+    L.circleMarker([p.lat,p.lon],{radius:5+Math.min(p.incidents.length*1.6,10),
+      color:col,weight:2,fillColor:col,fillOpacity:.55})
      .addTo(mapObj).bindPopup(popupHtml(p),{maxWidth:340});
   });
+  // click anywhere -> set the centre of the area of interest
+  mapObj.on("click",e=>{ aoi={lat:e.latlng.lat,lon:e.latlng.lng,label:"dropped pin"}; runAoi(); });
   setTimeout(()=>mapObj&&mapObj.invalidateSize(),60);
+  if(aoi) runAoi();
+}
+
+function wireMapControls(){
+  $$(".mapscope [data-scope]").forEach(b=>b.onclick=()=>{mapScope=b.dataset.scope; aoi?runAoi():renderMap();});
+  $$(".mapscope [data-km]").forEach(b=>b.onclick=()=>{aoiKm=+b.dataset.km; refreshControls(); if(aoi)runAoi();});
+  $$(".mapscope [data-days]").forEach(b=>b.onclick=()=>{aoiDays=+b.dataset.days; refreshControls(); if(aoi)runAoi();});
+  const clr=$("#aoiClear");
+  if(clr) clr.onclick=()=>{aoi=null; $("#aoiList").innerHTML=""; renderMap();};
+  const box=$("#aoiSearch");
+  if(box) box.oninput=async()=>{
+    const v=box.value.trim();
+    if(v.length<3){ $("#aoiSug").textContent=""; return; }
+    const r=await (await fetch("/api/geosearch?q="+encodeURIComponent(v))).json();
+    const top=(r.results||[]).slice(0,4);
+    $("#aoiSug").innerHTML=top.map(x=>
+      `<a href="#" data-lat="${x.lat}" data-lon="${x.lon}" data-place="${esc(x.place)}"
+          style="color:var(--accent2);margin-right:10px">${esc(x.place)} (${x.state})</a>`).join("");
+    $$("#aoiSug a").forEach(a=>a.onclick=ev=>{
+      ev.preventDefault();
+      aoi={lat:+a.dataset.lat, lon:+a.dataset.lon, label:a.dataset.place};
+      if(mapObj) mapObj.setView([aoi.lat,aoi.lon], aoiKm<=10?11:aoiKm<=30?10:9);
+      runAoi();
+    });
+  };
+}
+
+function refreshControls(){
+  const host=document.querySelector("#content");
+  if(!host) return;
+  const cur=host.querySelectorAll(".mapscope");
+  if(cur.length>=2){
+    const tmp=document.createElement("div"); tmp.innerHTML=aoiControls();
+    cur[0].replaceWith(tmp.children[0]); cur[cur.length-1].replaceWith(tmp.children[0]);
+  }
+  wireMapControls();
+}
+
+async function runAoi(){
+  if(!aoi||!mapObj) return;
+  const url=`/api/radius?lat=${aoi.lat}&lon=${aoi.lon}&km=${aoiKm}&days=${aoiDays}&scope=${mapScope}`;
+  const d=await (await fetch(url)).json();
+  // draw / move the circle
+  if(circleLayer) mapObj.removeLayer(circleLayer);
+  circleLayer=L.circle([aoi.lat,aoi.lon],{radius:aoiKm*1000,color:"var(--accent)",
+    weight:2,fillColor:"#e36209",fillOpacity:.08,dashArray:"5,5"}).addTo(mapObj);
+  L.circleMarker([aoi.lat,aoi.lon],{radius:5,color:"#fff",weight:2,
+    fillColor:"#e36209",fillOpacity:1}).addTo(circleLayer._map);
+  aoiMarkers.forEach(m=>mapObj.removeLayer(m)); aoiMarkers=[];
+  d.points.forEach(p=>{
+    const col=SEVCOL[p.severity]||SEVCOL.LOW;
+    const m=L.circleMarker([p.lat,p.lon],{radius:6+Math.min(p.incidents.length*1.8,12),
+      color:col,weight:3,fillColor:col,fillOpacity:.85})
+      .addTo(mapObj).bindPopup(popupHtml(p),{maxWidth:360});
+    aoiMarkers.push(m);
+  });
+  const period=aoiDays===0?"whole archive":aoiDays===1?"today":`last ${aoiDays} days`;
+  $("#mapstats").innerHTML=`<b>${d.total}</b> ${mapScope==="security"?"security ":""}stor${d.total===1?"y":"ies"} `+
+    `at <b>${d.locations}</b> location${d.locations===1?"":"s"} within <b>${aoiKm} km</b> of `+
+    `${esc(aoi.label)} · ${period}`;
+  $("#aoiList").innerHTML = d.points.length ? `
+    <h2>Inside the circle — nearest first</h2>
+    ${d.points.map(p=>`<div class="card">
+      <div style="display:flex;gap:10px;align-items:baseline">
+        <b>${esc(p.place||"—")}</b><span class="badge">${p.state||""}</span>
+        <span class="ts mono">${p.distance_km} km away</span>
+        <span style="margin-left:auto" class="sev sev-${p.severity}">${p.severity}</span>
+      </div>
+      ${p.incidents.slice(0,8).map(i=>`<div class="pincident">
+        <a href="${esc(i.url)}" target="_blank" rel="noopener">${esc(i.summary||i.headline||"")}</a>
+        <div class="pmeta mono">${i.pub_date||""} ${i.pub_time_ist&&i.pub_time_ist!=="unknown"?"· "+i.pub_time_ist:""}
+          ${i.outlet?"· "+esc(i.outlet):""}</div></div>`).join("")}
+    </div>`).join("")}`
+    : `<div class="empty">Nothing located inside this circle. Try a bigger radius or a longer period —
+       note only stories naming a recognised place can appear here.</div>`;
 }
 
 // ---------- Actors tab (self-contained; touches no other view) ----------
