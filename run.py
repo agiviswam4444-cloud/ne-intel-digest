@@ -17,6 +17,11 @@ def main():
     if cmd == "collect":
         from digest.pipeline import run
         run("config.yaml")
+    elif cmd == "login-x":
+        # One-time: opens a browser so YOU can sign in to X. No credential is
+        # read, typed or stored by this program — only the browser profile.
+        from digest import xsocial
+        xsocial.login()
     elif cmd == "serve":
         import uvicorn
         port = 8642

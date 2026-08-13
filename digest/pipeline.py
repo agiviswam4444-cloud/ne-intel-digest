@@ -202,6 +202,17 @@ def run(config_path="config.yaml", verbose=True):
         collected += tcands
         log(f"Telegram: {len(tg)} channels, {len(tcands)} in-window messages")
 
+    # ---- X via the user's own logged-in browser profile. OFF unless
+    #      x_scrape.enabled is set; see the warning in config.yaml. Additive. ----
+    xs = cfg.get("x_scrape") or {}
+    if xs.get("enabled"):
+        from . import xsocial
+        xcands, xstatus = xsocial.collect(xs, start, end)
+        for key, st in xstatus.items():
+            db.log_source(con, run_date, f"X: {key}", "X", st, 0)
+        collected += xcands
+        log(f"X scrape: {len(xcands)} tweets from {len(xstatus)} query/tab pairs")
+
     # ---- Dedup by URL, then by normalized headline (collapses the same story
     #      seen via multiple outlets / the Google redirect; first seen wins,
     #      and papers are ordered before discovery so real URLs win). ----

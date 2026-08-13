@@ -240,6 +240,28 @@ foreign_queries:
 # mizoramnews (empty), mrtv_news (auto-deleting).
 # CN/BD/MM entries still pass the defence filter below.
 # ------------------------------------------------------------------
+# ------------------------------------------------------------------
+# X (Twitter) via YOUR OWN logged-in browser session. DISABLED by default.
+#
+# Set up:  python run.py login-x     (opens a window; you sign in yourself —
+#                                     no password is ever handled by the code)
+# Then set enabled: true below.
+#
+# WARNING: automated access breaks X's terms of service. The realistic risk is
+# rate-limiting, restriction or SUSPENSION OF THE ACCOUNT USED. Use a throwaway
+# account created for this, never your main one. Polling is kept modest on
+# purpose (few queries, pauses between requests).
+# ------------------------------------------------------------------
+x_scrape:
+  enabled: false
+  per_tab: 10          # tweets taken from each of Top and Latest, per query
+  queries:
+    - {state: MN, q: "Manipur (army OR militant OR firing OR blockade)"}
+    - {state: AS, q: "Assam (army OR ULFA OR security OR encounter)"}
+    - {state: NL, q: "Nagaland (NSCN OR army OR ceasefire)"}
+    - {state: MM, q: "Myanmar border India (junta OR clash OR refugee)"}
+    - {state: CN, q: "China India LAC (PLA OR incursion OR border)"}
+
 telegram_channels:
   - {name: "The Irrawaddy",  channel: theirrawaddy,  state: MM}
   - {name: "Mizzima Daily",  channel: mizzimadaily,  state: MM}
