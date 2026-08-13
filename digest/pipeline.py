@@ -2,7 +2,7 @@
 import os, re, time, json, datetime, concurrent.futures as cf
 import yaml
 
-from . import db, collector, verifier, classifier, ai, geo, enrich
+from . import db, collector, verifier, classifier, ai, geo, enrich, telegram
 
 IST = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
 
@@ -190,6 +190,17 @@ def run(config_path="config.yaml", verbose=True):
                     collected.append(c)
                 n_fq += len(cands)
         log(f"Neighbourhood watch: {len(fq)} searches, {n_fq} candidates")
+
+    # ---- Public Telegram channels (no API key / login). Additive phase: it
+    #      adds candidates and touches no existing source path. ----
+    tg = cfg.get("telegram_channels", [])
+    if tg:
+        tcands, tstatus = telegram.collect(tg, start, end,
+                                           int(cfg.get("telegram_max_per_channel", 20)))
+        for name, st in tstatus.items():
+            db.log_source(con, run_date, f"TG: {name}", "TG", st, 0)
+        collected += tcands
+        log(f"Telegram: {len(tg)} channels, {len(tcands)} in-window messages")
 
     # ---- Dedup by URL, then by normalized headline (collapses the same story
     #      seen via multiple outlets / the Google redirect; first seen wins,

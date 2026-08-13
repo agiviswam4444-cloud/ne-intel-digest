@@ -228,6 +228,26 @@ foreign_queries:
   - {state: MM, q: "site:irrawaddy.com"}
   - {state: MM, q: "Myanmar India border Chin State OR Sagaing security"}
 
+# ------------------------------------------------------------------
+# Public Telegram channels (t.me/s/<channel> — public HTML, no API key, no
+# login, no account). Verified live before adding; each was checked for recent
+# posts. Myanmar channels are the high-value ones: they post within hours and
+# much of it never reaches their sites' RSS.
+#
+# NOT included on purpose: Assam Tribune and The News Mill run active channels
+# but are already collected via RSS, so adding them would only duplicate.
+# Channels found dead/stale when probed: northeastnow (last post 2025),
+# mizoramnews (empty), mrtv_news (auto-deleting).
+# CN/BD/MM entries still pass the defence filter below.
+# ------------------------------------------------------------------
+telegram_channels:
+  - {name: "The Irrawaddy",  channel: theirrawaddy,  state: MM}
+  - {name: "Mizzima Daily",  channel: mizzimadaily,  state: MM}
+  - {name: "DVB TV News",    channel: dvbtvnews,     state: MM}
+  - {name: "Khit Thit",      channel: khitthitnews,  state: MM}
+  - {name: "RFA Burmese",    channel: rfaburmese,    state: MM}
+  - {name: "BNI Online",     channel: bnionline,     state: MM}
+
 # Defence-relevance gate for the three regions above ONLY (never applied to
 # the NE states). A story must mention at least one of these to be kept.
 defence_keywords:
@@ -240,7 +260,28 @@ defence_keywords:
    ceasefire, "arakan army", tnla, mndaa, "ethnic armed", bgb, "border guard",
    ispr, procurement, modernisation, modernization, "defence deal", geopolitic,
    strategic, intelligence, espionage, spy, sanction, "war ", conflict, clash,
-   ccp, "communist party", xi jinping, taiwan, "south china sea", himalaya]
+   ccp, "communist party", xi jinping, taiwan, "south china sea", himalaya,
+   # --- Burmese security vocabulary. REQUIRED: the Telegram channels post in
+   # Burmese script, and without these 76 of 77 messages were being silently
+   # dropped by the English-only list. Measured: these recover ~22%.
+   "စစ်တပ်",        # military / army
+   "စစ်ကောင်စီ",     # military council (junta)
+   "တပ်မတော်",      # Tatmadaw
+   "တပ်",           # troops
+   "တိုက်ပွဲ",        # battle / fighting
+   "ပစ်ခတ်",        # shooting / firing
+   "လေကြောင်း",     # air (strike)
+   "ဗုံး",           # bomb
+   "လက်နက်",        # weapon
+   "ဖမ်းဆီး",       # arrest / detain
+   "သိမ်းပိုက်",      # seize / capture
+   "အကြမ်းဖက်",     # terrorism
+   "နယ်စပ်",        # border
+   "စစ်ဘေး",        # war-displaced
+   "ကာကွယ်ရေး",     # defence
+   "လုံခြုံရေး",      # security
+   # armed-group acronyms (written in Latin even in Burmese text)
+   "KIA", "TNLA", "MNDAA", "PDF", "AA ", "KNU", "KNLA", "RCSS", "SSPP"]
 
 # Topic discovery net — Google News keyword searches. This is the safety net
 # that catches NE news carried by ANY outlet (national, obscure, or simply not
