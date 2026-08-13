@@ -40,6 +40,22 @@ _DATELINE_CHARS = 300
 _BODY_CHARS = 1500
 
 
+# Story tag metadata. MEASURED on 16 unlocated stories: meta keywords yielded 3
+# new locations (e.g. "Jorhat Health Camp" -> Jorhat, "Biswanath Chariali" ->
+# Biswanath) that the body pass missed entirely.
+#
+# `articleSection` is deliberately NOT used: its values are desk names
+# ("National", "Sports", "Videos", "JOCO SERIOUS") and its only geo-resolvable
+# value was the newspaper's own city — the exact bias this module avoids.
+_META_KEYWORDS = re.compile(
+    r'<meta[^>]+name=["\']keywords["\'][^>]+content=["\']([^"\']+)', re.I)
+
+
+def _meta_keywords(html):
+    m = _META_KEYWORDS.search(html)
+    return m.group(1) if m else None
+
+
 def _article_text(html):
     soup = BeautifulSoup(html, "html.parser")
     for t in soup(_STRIP):
@@ -59,19 +75,27 @@ def locate_one(url, state):
         r = requests.get(url, headers=UA, timeout=TIMEOUT)
         if r.status_code != 200:
             return None
-        txt = _article_text(r.text)
+        html = r.text
+        txt = _article_text(html)
     except Exception:
         return None
-    if not txt:
-        return None
-    # 1) dateline zone — most reliable: it names the incident location
-    hit = geo.geolocate(txt[:_DATELINE_CHARS], state)
-    if hit:
-        return hit[0], hit[1], hit[2], "dateline"
-    # 2) wider body — still inside the article, so no site chrome
-    hit = geo.geolocate(txt[:_BODY_CHARS], state)
-    if hit:
-        return hit[0], hit[1], hit[2], "body"
+    if txt:
+        # 1) dateline zone — most reliable: it names the incident location
+        hit = geo.geolocate(txt[:_DATELINE_CHARS], state)
+        if hit:
+            return hit[0], hit[1], hit[2], "dateline"
+        # 2) wider body — still inside the article, so no site chrome
+        hit = geo.geolocate(txt[:_BODY_CHARS], state)
+        if hit:
+            return hit[0], hit[1], hit[2], "body"
+    # 3) story tag metadata — last resort. Ordered last on purpose: keywords can
+    #    name a person's home city rather than the incident site, so it must
+    #    never override a dateline or in-body location.
+    kws = _meta_keywords(html)
+    if kws:
+        hit = geo.geolocate(kws, state)
+        if hit:
+            return hit[0], hit[1], hit[2], "meta-keywords"
     return None
 
 
@@ -100,7 +124,11 @@ def enrich_locations(con, cfg, log=print):
     def _job(r):
         return r, locate_one(r["url"], r["state"])
 
-    with cf.ThreadPoolExecutor(8) as ex:
+    # 4, not 8: measured that 8 concurrent fetches against the same outlet get
+    # refused (ConnectionError on every request), which silently inflated the
+    # "attempted but not located" count. Lower concurrency is slower per run but
+    # actually returns pages.
+    with cf.ThreadPoolExecutor(4) as ex:
         for r, hit in ex.map(_job, rows):
             if hit:
                 db.set_geo(con, r["url"], hit[0], hit[1], hit[2], hit[3])

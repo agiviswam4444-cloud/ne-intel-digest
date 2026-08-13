@@ -36,7 +36,17 @@ CREATE INDEX IF NOT EXISTS idx_stories_run ON stories(run_date);
 
 def connect(path):
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    con = sqlite3.connect(path)
+    con = sqlite3.connect(path, timeout=30)
+    # WAL lets the web server keep reading while a collection writes. Without
+    # it the two collide: the dashboard's Source Status momentarily blanks and
+    # a concurrent write fails outright with "database is locked". `timeout`
+    # makes a writer wait for a busy lock instead of erroring immediately.
+    try:
+        con.execute("PRAGMA journal_mode=WAL")
+        con.execute("PRAGMA busy_timeout=30000")
+        con.execute("PRAGMA synchronous=NORMAL")
+    except Exception:
+        pass                     # non-fatal: fall back to default journalling
     con.row_factory = sqlite3.Row
     con.executescript(SCHEMA)
     _migrate(con)
