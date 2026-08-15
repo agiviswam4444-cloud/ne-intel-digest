@@ -149,12 +149,12 @@ summary{cursor:pointer;padding:8px 4px;color:var(--subtext);font-weight:600}
 <script>
 const $=s=>document.querySelector(s);
 const $$=s=>document.querySelectorAll(s);
-const STATE_ORDER=["MN","AS","NL","MZ","ML","AR","TR","SK","MULTI","CN","BD","MM"];
+const STATE_ORDER=["MN","AS","NL","MZ","ML","AR","TR","SK","MULTI","DEF","CN","BD","MM"];
 const STATE_NAME={AS:"Assam",MN:"Manipur",NL:"Nagaland",MZ:"Mizoram",ML:"Meghalaya",
   AR:"Arunachal",TR:"Tripura",SK:"Sikkim",MULTI:"Multi / Border",
-  CN:"🇨🇳 China",BD:"🇧🇩 Bangladesh",MM:"🇲🇲 Myanmar"};
-// Neighbourhood-watch columns are defence-filtered and visually separated.
-const FOREIGN=new Set(["CN","BD","MM"]);
+  DEF:"🛡 Defence",CN:"🇨🇳 China",BD:"🇧🇩 Bangladesh",MM:"🇲🇲 Myanmar"};
+// Defence + neighbourhood-watch columns are defence-filtered and set apart.
+const FOREIGN=new Set(["DEF","CN","BD","MM"]);
 const SEVCOL={CRITICAL:"#f85149",HIGH:"#e36209",MEDIUM:"#d29922",LOW:"#8b949e"};
 let D=null, tab="console", query="", mapObj=null, mapScope="all";
 

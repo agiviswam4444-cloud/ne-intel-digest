@@ -31,7 +31,10 @@ def in_ne_scope(text, cfg):
 # Regions covered as "neighbourhood watch" rather than as NE states. Stories
 # from these are kept ONLY if they are defence/security relevant (see
 # is_defence_relevant); NE-state stories are unaffected by this.
-FOREIGN_STATES = {"CN", "BD", "MM"}
+# DEF is the defence & strategic-affairs column (Indian/international defence
+# trade press). It is grouped here because it takes the same defence-relevance
+# gate as the neighbourhood columns — it is NOT an NE state.
+FOREIGN_STATES = {"CN", "BD", "MM", "DEF"}
 
 
 def is_defence_relevant(text, cfg):

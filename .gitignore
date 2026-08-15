@@ -10,3 +10,6 @@ __pycache__/
 .setup_done
 # local editor/session settings
 .claude/settings.local.json
+
+# local virtual environment (rebuilt by start-mac.command)
+.venv/

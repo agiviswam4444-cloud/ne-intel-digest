@@ -189,20 +189,20 @@ foreign_papers:
   - {name: "The Diplomat",       state: CN, url: "https://thediplomat.com/feed/"}
   - {name: "War on the Rocks",   state: CN, url: "https://warontherocks.com/feed/"}
   - {name: "Jamestown Foundation", state: CN, url: "https://jamestown.org/feed/"}
-  - {name: "Defense News",       state: CN, url: "https://defensenews.com/arc/outboundfeeds/rss/"}
   - {name: "Asia Times",         state: CN, url: "https://asiatimes.com/feed/"}
   - {name: "Taipei Times",       state: CN, url: "https://taipeitimes.com/xml/index.rss"}
   - {name: "RFA English",        state: CN, url: "https://rfa.org/english/rss2.xml"}
-  - {name: "Bharat Shakti",      state: CN, url: "https://bharatshakti.in/feed/"}
-  - {name: "StratNews Global",   state: CN, url: "https://stratnewsglobal.com/feed/"}
-  # Indian defence trade press. Verified live before adding (idrw 30 dated
-  # entries; Indian Defense News is a Blogger site, so its feed is at
-  # /feeds/posts/default, not /feed/). Filed under CN like the two above
-  # because that column is the defence/strategic watch; they still pass the
-  # defence_keywords gate, so procurement/DRDO/exercise stories come through
-  # and non-defence items are dropped.
-  - {name: "IDRW",               state: CN, url: "https://idrw.org/feed/"}
-  - {name: "Indian Defense News", state: CN, url: "https://www.indiandefensenews.in/feeds/posts/default"}
+  # ---- Defence & strategic affairs (own DEF column, not China-specific) ----
+  # Indian and international defence trade press: procurement, DRDO/HAL,
+  # exercises, capability. Each verified live before adding. NOTE: Indian
+  # Defense News is a Blogger site, so its feed is /feeds/posts/default —
+  # /feed/ returns 404. These still pass the defence_keywords gate, so
+  # non-defence filler from the same feeds is dropped.
+  - {name: "IDRW",                state: DEF, url: "https://idrw.org/feed/"}
+  - {name: "Indian Defense News", state: DEF, url: "https://www.indiandefensenews.in/feeds/posts/default"}
+  - {name: "Bharat Shakti",       state: DEF, url: "https://bharatshakti.in/feed/"}
+  - {name: "StratNews Global",    state: DEF, url: "https://stratnewsglobal.com/feed/"}
+  - {name: "Defense News",        state: DEF, url: "https://defensenews.com/arc/outboundfeeds/rss/"}
   # ---- Bangladesh ----
   - {name: "The Business Standard", state: BD, url: "https://tbsnews.net/rss.xml"}
   - {name: "The Daily Star",     state: BD, url: "https://thedailystar.net/rss.xml"}
