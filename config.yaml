@@ -195,6 +195,14 @@ foreign_papers:
   - {name: "RFA English",        state: CN, url: "https://rfa.org/english/rss2.xml"}
   - {name: "Bharat Shakti",      state: CN, url: "https://bharatshakti.in/feed/"}
   - {name: "StratNews Global",   state: CN, url: "https://stratnewsglobal.com/feed/"}
+  # Indian defence trade press. Verified live before adding (idrw 30 dated
+  # entries; Indian Defense News is a Blogger site, so its feed is at
+  # /feeds/posts/default, not /feed/). Filed under CN like the two above
+  # because that column is the defence/strategic watch; they still pass the
+  # defence_keywords gate, so procurement/DRDO/exercise stories come through
+  # and non-defence items are dropped.
+  - {name: "IDRW",               state: CN, url: "https://idrw.org/feed/"}
+  - {name: "Indian Defense News", state: CN, url: "https://www.indiandefensenews.in/feeds/posts/default"}
   # ---- Bangladesh ----
   - {name: "The Business Standard", state: BD, url: "https://tbsnews.net/rss.xml"}
   - {name: "The Daily Star",     state: BD, url: "https://thedailystar.net/rss.xml"}
