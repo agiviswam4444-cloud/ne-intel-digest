@@ -262,13 +262,25 @@ foreign_queries:
 # ------------------------------------------------------------------
 x_scrape:
   enabled: false
-  per_tab: 10          # tweets taken from each of Top and Latest, per query
+  per_tab: 5           # posts taken per tab, per query
+  tabs: [latest, top]  # set to [latest] for newest-only
+
+  # X is rate-limit sensitive and every extra request raises the chance of the
+  # account being restricted. With 8 states x 2 tabs that is 16 page loads, so
+  # DO NOT run it on every 30-minute cycle: this makes X run at most once every
+  # N minutes, independent of how often collection runs. 0 = every run.
+  min_interval_minutes: 180
+
+  # "Indian Army" + the state name, one query per state.
   queries:
-    - {state: MN, q: "Manipur (army OR militant OR firing OR blockade)"}
-    - {state: AS, q: "Assam (army OR ULFA OR security OR encounter)"}
-    - {state: NL, q: "Nagaland (NSCN OR army OR ceasefire)"}
-    - {state: MM, q: "Myanmar border India (junta OR clash OR refugee)"}
-    - {state: CN, q: "China India LAC (PLA OR incursion OR border)"}
+    - {state: MN, q: "Indian Army Manipur"}
+    - {state: AS, q: "Indian Army Assam"}
+    - {state: NL, q: "Indian Army Nagaland"}
+    - {state: MZ, q: "Indian Army Mizoram"}
+    - {state: ML, q: "Indian Army Meghalaya"}
+    - {state: AR, q: "Indian Army Arunachal Pradesh"}
+    - {state: TR, q: "Indian Army Tripura"}
+    - {state: SK, q: "Indian Army Sikkim"}
 
 telegram_channels:
   - {name: "The Irrawaddy",  channel: theirrawaddy,  state: MM}

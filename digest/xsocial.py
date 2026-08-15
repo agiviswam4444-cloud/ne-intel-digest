@@ -107,6 +107,30 @@ def _parse_tweets(page, cap, label, state, start, end):
     return out
 
 
+_STAMP = os.path.join("data", ".x_last_run")
+
+
+def _throttled(minutes):
+    """True if X ran less than `minutes` ago. Keeps request volume down — the
+    single biggest factor in whether the account gets restricted."""
+    if minutes <= 0:
+        return False
+    try:
+        last = os.path.getmtime(_STAMP)
+    except OSError:
+        return False
+    age_min = (datetime.datetime.now().timestamp() - last) / 60
+    return age_min < minutes
+
+
+def _mark_run():
+    try:
+        os.makedirs(os.path.dirname(_STAMP), exist_ok=True)
+        open(_STAMP, "w").write(datetime.datetime.now().isoformat())
+    except OSError:
+        pass
+
+
 def collect(cfg_x, start, end, log=print):
     """Fetch the configured searches. Returns (candidates, statuses)."""
     queries = cfg_x.get("queries") or []
@@ -115,7 +139,12 @@ def collect(cfg_x, start, end, log=print):
     if not profile_exists():
         return [], {q.get("q", "?"): "no-session (run: python run.py login-x)"
                     for q in queries}
+    wait = int(cfg_x.get("min_interval_minutes", 0) or 0)
+    if _throttled(wait):
+        return [], {"x-scrape": f"throttled (min_interval_minutes={wait})"}
+    _mark_run()
     cap = int(cfg_x.get("per_tab", 10))
+    want = [t.lower() for t in (cfg_x.get("tabs") or ["top", "latest"])]
     results, statuses = [], {}
     from playwright.sync_api import sync_playwright
     try:
@@ -127,7 +156,8 @@ def collect(cfg_x, start, end, log=print):
             for item in queries:
                 q = item.get("q")
                 state = item.get("state")
-                for tab, suffix in (("top", ""), ("latest", "&f=live")):
+                for tab, suffix in [t for t in (("top", ""), ("latest", "&f=live"))
+                                    if t[0] in want]:
                     url = ("https://x.com/search?q=" +
                            __import__("urllib.parse", fromlist=["quote_plus"]).quote_plus(q) +
                            suffix)
