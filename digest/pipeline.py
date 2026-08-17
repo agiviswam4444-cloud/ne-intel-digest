@@ -8,7 +8,9 @@ IST = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
 
 
 def load_config(path="config.yaml"):
-    with open(path) as f:
+    # encoding is REQUIRED: config.yaml holds Burmese script and emoji, and
+    # Windows defaults to cp1252, which cannot decode them (UnicodeDecodeError).
+    with open(path, encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
@@ -371,9 +373,9 @@ def run(config_path="config.yaml", verbose=True):
         "SELECT * FROM stories WHERE run_date=? ORDER BY section, pub_date DESC, pub_time_ist DESC",
         (run_date,))]
     out = os.path.join(cfg["paths"]["json_out"], f"ne-intel-digest-{run_date}.json")
-    with open(out, "w") as f:
+    with open(out, "w", encoding="utf-8") as f:
         json.dump({"run_date": run_date, "window": [start.isoformat(), end.isoformat()],
-                   "audit": audit, "stories": rows}, f, indent=1)
+                   "audit": audit, "stories": rows}, f, indent=1, ensure_ascii=False)
     log(f"Done. {final} stories -> {out}")
     con.close()
     return audit

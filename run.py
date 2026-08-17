@@ -11,6 +11,16 @@ import os, sys
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ".")
 
+# Windows consoles default to a legacy codepage (cp1252), which cannot ENCODE
+# the Burmese / Assamese / Mizo text this app collects — printing a status line
+# containing it would raise UnicodeEncodeError and kill the run. Force UTF-8 on
+# stdout/stderr and replace anything unmappable rather than crash.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 
 def main():
     cmd = sys.argv[1] if len(sys.argv) > 1 else "serve"

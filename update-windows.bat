@@ -2,6 +2,8 @@
 setlocal
 cd /d "%~dp0"
 title Update NE Intel Digest
+chcp 65001 >nul 2>nul
+set PYTHONUTF8=1
 
 echo ============================================================
 echo   UPDATING from GitHub...

@@ -452,7 +452,7 @@ def fetch_x_handles(cfg, start, end):
     if not os.path.exists(token_path):
         return [], {h: "token-file-missing" for h in cfg["handles"]}
     try:
-        token = open(token_path).read().strip()
+        token = open(token_path, encoding="utf-8").read().strip()
     except OSError as ex:
         return [], {h: f"token-file-unreadable:{type(ex).__name__}"
                     for h in cfg["handles"]}

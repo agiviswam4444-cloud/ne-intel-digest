@@ -2,6 +2,10 @@
 setlocal enabledelayedexpansion
 cd /d "%~dp0"
 title NE India Security Intel Digest
+REM UTF-8 console + UTF-8 default for Python: the app handles Burmese,
+REM Assamese and Mizo text, which the legacy cp1252 codepage cannot represent.
+chcp 65001 >nul 2>nul
+set PYTHONUTF8=1
 
 echo ============================================================
 echo   NE INDIA // SECURITY INTEL DIGEST
