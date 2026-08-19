@@ -50,7 +50,21 @@ def login(timeout_minutes=5):
             PROFILE_DIR, headless=False, user_agent=_UA,
             viewport={"width": 1280, "height": 900})
         page = ctx.pages[0] if ctx.pages else ctx.new_page()
-        page.goto("https://x.com/login", wait_until="domcontentloaded")
+        # A transient network blip (ERR_NETWORK_CHANGED on a wifi/VPN switch)
+        # would otherwise abort the whole login before the user sees anything.
+        for attempt in range(4):
+            try:
+                page.goto("https://x.com/login", wait_until="domcontentloaded",
+                          timeout=45000)
+                break
+            except Exception as ex:
+                if attempt == 3:
+                    ctx.close()
+                    print(f"Could not reach x.com ({type(ex).__name__}). "
+                          "Check the connection and re-run.")
+                    return False
+                print(f"  network hiccup ({type(ex).__name__}), retrying...")
+                page.wait_for_timeout(4000)
         deadline = datetime.datetime.now() + datetime.timedelta(minutes=timeout_minutes)
         ok = False
         while datetime.datetime.now() < deadline:
@@ -131,12 +145,31 @@ def _mark_run():
         pass
 
 
+def _open_context(p, cfg_x):
+    """Return (context, cleanup) for either mode.
+
+    CDP mode attaches to a Chrome you are ALREADY logged into, started with
+    --remote-debugging-port. Nothing is typed or stored; we just open a tab in
+    your existing session. Cleanup closes only our tab, never your browser.
+    """
+    if cfg_x.get("use_chrome_cdp"):
+        url = cfg_x.get("cdp_url") or "http://127.0.0.1:9222"
+        browser = p.chromium.connect_over_cdp(url)
+        ctx = browser.contexts[0] if browser.contexts else browser.new_context()
+        return ctx, (lambda: browser.close())     # detaches; Chrome keeps running
+    ctx = p.chromium.launch_persistent_context(
+        PROFILE_DIR, headless=True, user_agent=_UA,
+        viewport={"width": 1280, "height": 900})
+    return ctx, (lambda: ctx.close())
+
+
 def collect(cfg_x, start, end, log=print):
     """Fetch the configured searches. Returns (candidates, statuses)."""
     queries = cfg_x.get("queries") or []
     if not queries:
         return [], {}
-    if not profile_exists():
+    use_cdp = bool(cfg_x.get("use_chrome_cdp"))
+    if not use_cdp and not profile_exists():
         return [], {q.get("q", "?"): "no-session (run: python run.py login-x)"
                     for q in queries}
     wait = int(cfg_x.get("min_interval_minutes", 0) or 0)
@@ -149,10 +182,14 @@ def collect(cfg_x, start, end, log=print):
     from playwright.sync_api import sync_playwright
     try:
         with sync_playwright() as p:
-            ctx = p.chromium.launch_persistent_context(
-                PROFILE_DIR, headless=True, user_agent=_UA,
-                viewport={"width": 1280, "height": 900})
-            page = ctx.pages[0] if ctx.pages else ctx.new_page()
+            try:
+                ctx, cleanup = _open_context(p, cfg_x)
+            except Exception as ex:
+                hint = (" — is Chrome running with --remote-debugging-port=9222?"
+                        if use_cdp else "")
+                return [], {"x-scrape": f"connect-failed:{type(ex).__name__}{hint}"}
+            page = ctx.new_page() if use_cdp else (
+                ctx.pages[0] if ctx.pages else ctx.new_page())
             for item in queries:
                 q = item.get("q")
                 state = item.get("state")
@@ -174,7 +211,9 @@ def collect(cfg_x, start, end, log=print):
                     except Exception as ex:
                         statuses[key] = f"error:{type(ex).__name__}"
                     page.wait_for_timeout(2500)   # be gentle between requests
-            ctx.close()
+            if use_cdp:
+                page.close()          # close ONLY our tab, leave Chrome alone
+            cleanup()
     except Exception as ex:
         return results, {"x-scrape": f"error:{type(ex).__name__}"}
     return results, statuses

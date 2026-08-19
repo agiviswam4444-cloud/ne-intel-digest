@@ -5,6 +5,8 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from . import db, pipeline, classifier, geo, actors
 
+IST = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
+
 app = FastAPI(title="NE Intel Digest")
 CFG = pipeline.load_config(os.environ.get("DIGEST_CONFIG", "config.yaml"))
 UI_DIR = os.path.join(os.path.dirname(__file__), "..", "ui")
@@ -57,8 +59,21 @@ def _prev_day(d):
 
 
 def _latest_pub_date(con):
+    """The date the dashboard anchors on = TODAY in IST.
+
+    This used to return MAX(pub_date) from the database, which made the app sit
+    a day behind: at 09:00 on the 19th the newest stored story is usually still
+    dated the 18th (outlets publish through the day), so the window rendered as
+    17th+18th instead of 18th+19th. Anchoring on the clock keeps the dashboard
+    aligned with pipeline.compute_window(), which also keys on today.
+
+    If the clock somehow trails the data (restored DB, timezone oddity), fall
+    forward to MAX(pub_date) so nothing is ever hidden.
+    """
+    today = datetime.datetime.now(IST).date().isoformat()
     r = con.execute("SELECT MAX(pub_date) d FROM stories").fetchone()
-    return r["d"] if r and r["d"] else ""
+    newest = r["d"] if r and r["d"] else ""
+    return max(today, newest) if newest else today
 
 
 def _con():

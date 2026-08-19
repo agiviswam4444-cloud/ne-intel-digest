@@ -265,6 +265,23 @@ x_scrape:
   per_tab: 5           # posts taken per tab, per query
   tabs: [latest, top]  # set to [latest] for newest-only
 
+  # TWO WAYS TO GET A SESSION:
+  #
+  # (a) use_chrome_cdp: true — attach to a Chrome you are ALREADY logged into.
+  #     Start Chrome with a debug port first (quit it completely, then):
+  #       open -a "Google Chrome" --args --remote-debugging-port=9222
+  #     Nothing is typed or stored; the app just opens a tab in your session,
+  #     and closes only that tab afterwards. Chrome must be running whenever
+  #     collection runs.
+  #     NOTE: this uses whichever X account that Chrome is signed into — if
+  #     that is your personal account, it is the one at risk, not a throwaway.
+  #
+  # (b) use_chrome_cdp: false — a separate browser profile created by
+  #       python run.py login-x
+  #     Slower to set up but isolated, and works headless with no Chrome open.
+  use_chrome_cdp: false
+  cdp_url: "http://127.0.0.1:9222"
+
   # X is rate-limit sensitive and every extra request raises the chance of the
   # account being restricted. With 8 states x 2 tabs that is 16 page loads, so
   # DO NOT run it on every 30-minute cycle: this makes X run at most once every

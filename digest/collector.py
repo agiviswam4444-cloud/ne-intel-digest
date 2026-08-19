@@ -62,6 +62,15 @@ def _entry_dt(e):
     return None
 
 
+# Canned feed descriptions that carry no story content. These are long enough
+# to pass the length check, so they must be matched explicitly.
+_BOILERPLATE = re.compile(
+    r"(originally published on|appeared first on|republished from|"
+    r"read (the )?(full|more)|continue reading|click here|subscribe|"
+    r"^source\s*:|all rights reserved|follow us on|for more (news|updates))",
+    re.I)
+
+
 def _summary_from_entry(e, headline):
     """One-line summary from the RSS/Atom description: HTML stripped, first
     sentence only, max 160 chars. Falls back to the headline."""
@@ -74,9 +83,20 @@ def _summary_from_entry(e, headline):
                 break
     text = BeautifulSoup(raw, "html.parser").get_text(" ") if raw else ""
     text = re.sub(r"\s+", " ", text).strip()
+    # WordPress feeds often append "The post <title> appeared first on <site>."
+    # Strip it before judging whether anything real is left.
+    text = re.sub(r"\s*The post\b.*?appeared first on.*$", "", text,
+                  flags=re.I).strip()
     # Many feeds ship a boilerplate description (just a logo link / site brand).
     # Too short to be a real summary -> fall back to the headline.
     if len(text) < 20:
+        return headline
+    # Some feeds put ONLY a canned sentence in every description — e.g. IDRW
+    # ships "This report was originally published on IDRW.org." for every item.
+    # That is long enough to pass the length check but carries no information,
+    # and the dashboard shows summary in place of the headline, so the whole
+    # column ends up reading as the same boilerplate. Fall back to the headline.
+    if _BOILERPLATE.search(text):
         return headline
     m = re.match(r"(.+?[.!?])(?:\s|$)", text)
     first = m.group(1) if m else text
